@@ -20,10 +20,15 @@ SUPPORT_USERNAME = "@fr7gment" # Твой саппорт юз
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# База данных в папке /tmp, чтобы не затиралась при перезапусках кода
-DB_NAME = os.path.join("/tmp", "database.db")
+# Путь внутри Volume, чтобы база данных сохранялась НАВСЕГДА
+DB_DIR = "/app/data"
+DB_NAME = os.path.join(DB_DIR, "database.db")
 
 def init_db():
+    # Создаем папку /app/data, если она вдруг не создалась автоматически
+    if not os.path.exists(DB_DIR):
+        os.makedirs(DB_DIR, exist_ok=True)
+        
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute("""
@@ -101,11 +106,11 @@ async def check_subscription(user_id: int) -> bool:
         logging.error(f"Ошибка проверки подписки для {user_id}: {e}")
         return False
 
-# --- Меню (Кейсы теперь в самом верху) ---
+# --- Главное Меню (Кейсы в самом верху) ---
 def get_main_menu():
     builder = ReplyKeyboardBuilder()
     
-    # 🎰 Кнопка кейсов на всю ширину первой строки
+    # Кнопка кейсов на всю ширину сверху
     builder.button(text="🎰 Открыть Кейсы", web_app=types.WebAppInfo(url="https://google.com"))
     
     # Остальные кнопки ниже
@@ -115,7 +120,6 @@ def get_main_menu():
     builder.button(text="👥 Рефералка")
     builder.button(text="❓ Помощь")
     
-    # Сетка кнопок: 1 на первой строке (кейсы), остальные по 2 в ряд
     builder.adjust(1, 2, 2, 1) 
     return builder.as_markup(resize_keyboard=True)
 
@@ -126,7 +130,7 @@ def get_sub_keyboard():
     builder.adjust(1)
     return builder.as_markup()
 
-# --- Команда /start ---
+# --- Обработка команды /start ---
 @dp.message(CommandStart())
 async def cmd_start(message: types.Message):
     user_id = message.from_user.id
@@ -203,7 +207,7 @@ async def admin_panel(message: types.Message):
     )
     await message.answer(admin_text, parse_mode="Markdown")
 
-# --- Создание промокода (Только для админа) ---
+# --- Создание промокода (Только для тебя) ---
 @dp.message(lambda message: message.text and message.text.startswith('/create_promo'))
 async def cmd_create_promo(message: types.Message):
     if message.from_user.id != ADMIN_ID:
