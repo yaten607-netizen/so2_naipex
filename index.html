@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StandHub Cases</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    
+    <style>
+        /* --- ИГРОВОЙ СТИЛЬ (CSS) --- */
+        body {
+            background-color: #0d0e12; /* Глубокий темный фон */
+            color: #ffffff;
+            font-family: 'Arial', sans-serif;
+            text-align: center;
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1 {
+            color: #ff9a00; /* Фирменный оранжевый цвет Standoff */
+            text-shadow: 0 0 10px rgba(255, 154, 0, 0.5);
+            font-size: 24px;
+        }
+
+        /* Карточка кейса */
+        .case-container {
+            background: linear-gradient(135deg, #161920, #20242f);
+            border: 2px solid #2b313e;
+            border-radius: 12px;
+            padding: 20px;
+            max-width: 300px;
+            margin: 30px auto;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.5);
+        }
+
+        .case-name {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .case-price {
+            color: #4caf50; /* Зеленый цвет для цены */
+            font-size: 18px;
+            margin-bottom: 15px;
+        }
+
+        /* Геймерская неоновая кнопка */
+        .btn-open {
+            background: linear-gradient(90deg, #ff512f, #dd2476);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 25px;
+            cursor: pointer;
+            box-shadow: 0 0 15px rgba(221, 36, 118, 0.4);
+            transition: 0.2s;
+        }
+
+        .btn-open:active {
+            transform: scale(0.95); /* Эффект нажатия */
+        }
+
+        /* Окно с результатом дропа */
+        #result-box {
+            margin-top: 20px;
+            font-size: 18px;
+            font-weight: bold;
+            min-height: 40px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>🎰 КЕЙСЫ STANDHUB</h1>
+    <p>Испытай свою удачу прямо сейчас!</p>
+
+    <div class="case-container">
+        <div class="case-name">🔥 Weapon Case</div>
+        <div class="case-price">Цена: 100 Голды</div>
+        <button class="btn-open" onclick="openCase()">ОТКРЫТЬ КЕЙС</button>
+    </div>
+
+    <div id="result-box"></div>
+
+    <script>
+        // Инициализируем WebApp Телеграма
+        const tg = window.Telegram.WebApp;
+        tg.expand(); // Разворачиваем сайт на весь экран телефона
+
+        // Наш список предметов, цены и ШАНСЫ (ценность)
+        // Чем больше вес (weight), тем выше шанс, что выпадет этот предмет
+        const dropList = [
+            { name: "🔪 Karambit | Scratch", price: 1500, weight: 5 },   // Редкий дроп (Шанс 5%)
+            { name: "🔫 M4 | Necromancer", price: 350, weight: 15 },    // Средний дроп (Шанс 15%)
+            { name: "🔫 AKR | Tiger", price: 120, weight: 30 },         // Обычный дроп (Шанс 30%)
+            { name: "🔫 G22 | Nest", price: 20, weight: 50 }            // Часто выпадает (Шанс 50%)
+        ];
+
+        function openCase() {
+            const resultBox = document.getElementById("result-box");
+            resultBox.innerHTML = "🎰 Крутим рулетку...";
+
+            // Алгоритм выбора предмета с учетом шансов (ценности)
+            let totalWeight = 0;
+            dropList.forEach(item => totalWeight += item.weight);
+
+            let randomNum = Math.floor(Math.random() * totalWeight);
+            let selectedItem = null;
+
+            for (let i = 0; i < dropList.length; i++) {
+                randomNum -= dropList[i].weight;
+                if (randomNum < 0) {
+                    selectedItem = dropList[i];
+                    break;
+                }
+            }
+
+            // Имитируем крутилку (задержка 1.5 секунды)
+            setTimeout(() => {
+                // Показываем игроку, что он выбил
+                resultBox.innerHTML = `🎉 Выпало: <span style="color: #ff9a00;">${selectedItem.name}</span> (${selectedItem.price} голды)`;
+
+                // Формируем данные для отправки обратно в нашего Python-бота
+                const webAppData = {
+                    case_cost: 100, // Списываем 100 за открытие
+                    item_name: selectedItem.name,
+                    item_price: selectedItem.price
+                };
+
+                // Отправляем данные в бота и автоматически закрываем сайт
+                tg.sendData(json.stringify(webAppData));
+            }, 1500); 
+        }
+    </script>
+</body>
+</html>
