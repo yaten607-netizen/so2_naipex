@@ -3,6 +3,7 @@ import sqlite3
 import random
 import string
 import os
+import json
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart, Command
 from aiogram.utils.keyboard import ReplyKeyboardBuilder, InlineKeyboardBuilder
@@ -15,22 +16,25 @@ ADMIN_ID = 5376742900          # Твой личный Telegram ID
 CHANNEL_ID = -1003940562373    # ID твоего канала для проверки подписки
 CHANNEL_URL = "https://t.me/standhub_channel" # Ссылка для кнопки подписки
 SUPPORT_USERNAME = "@fr7gment" # Твой саппорт юз
+
+# ССЫЛКА НА ТВОЙ БУДУЩИЙ САЙТ С КЕЙСАМИ (заменишь потом на свою ссылку GitHub Pages)
+WEBAPP_URL = "https://google.com" 
 # =================================================================
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# Путь внутри Volume, чтобы база данных сохранялась НАВСЕГДА
 DB_DIR = "/app/data"
 DB_NAME = os.path.join(DB_DIR, "database.db")
 
 def init_db():
-    # Создаем папку /app/data, если её ещё нет
     if not os.path.exists(DB_DIR):
         os.makedirs(DB_DIR, exist_ok=True)
         
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
+    
+    # Таблица юзеров
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY,
@@ -40,6 +44,18 @@ def init_db():
             referrer_id INTEGER
         )
     """)
+    
+    # Таблица инвентаря (выбитые скины)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS inventory (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            item_name TEXT,
+            item_price INTEGER
+        )
+    """)
+    
+    # Таблица промокодов
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS promo_codes (
             code TEXT PRIMARY KEY,
@@ -50,9 +66,7 @@ def init_db():
     """)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS user_promos (
-            user_id INTEGER,
-            code TEXT,
-            PRIMARY KEY (user_id, code)
+            user_id INTEGER, code TEXT, PRIMARY KEY (user_id, code)
         )
     """)
     conn.commit()
@@ -91,6 +105,14 @@ def get_all_users():
     conn.close()
     return users
 
+# Добавление скина в инвентарь юзера
+def add_to_inventory(user_id, item_name, item_price):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO inventory (user_id, item_name, item_price) VALUES (?, ?, ?)", (user_id, item_name, item_price))
+    conn.commit()
+    conn.close()
+
 init_db()
 
 # --- Проверка подписки ---
@@ -106,22 +128,20 @@ async def check_subscription(user_id: int) -> bool:
         logging.error(f"Ошибка проверки подписки для {user_id}: {e}")
         return False
 
-# --- Главное Меню (Идеальный порядок кнопок) ---
+# --- Главное Меню ---
 def get_main_menu():
     builder = ReplyKeyboardBuilder()
     
-    # Слой 1: Кейсы в самом верху
-    builder.button(text="🎰 Открыть Кейсы", web_app=types.WebAppInfo(url="https://google.com"))
-    # Слой 2: Баланс на всю ширину под кейсами
     builder.button(text="💰 Баланс")
-    
-    # Остальные кнопки в ряд по 2 штуки
     builder.button(text="💰 Вывод голды")
     builder.button(text="🎁 Промокод")
     builder.button(text="👥 Рефералка")
     builder.button(text="❓ Помощь")
     
-    builder.adjust(1, 1, 2, 2) 
+    # Кнопка кейсов теперь ведет на наш будущий сайт WEBAPP_URL
+    builder.button(text="🎰 Открыть Кейсы", web_app=types.WebAppInfo(url=WEBAPP_URL))
+    
+    builder.adjust(2, 2, 1, 1) 
     return builder.as_markup(resize_keyboard=True)
 
 def get_sub_keyboard():
@@ -144,7 +164,7 @@ async def cmd_start(message: types.Message):
     if await check_subscription(user_id):
         welcome_text = (
             f"👋 Привет, {message.from_user.first_name}! Добро пожаловать в StandHub!\n\n"
-            "Здесь ты можешь зарабатывать голду Standoff 2, приглашая друзей и активируя промокоды. 🔥"
+            "Здесь ты можешь зарабатывать голду Standoff 2, открывать кейсы и активировать промокоды. 🔥"
         )
         await message.answer(welcome_text, reply_markup=get_main_menu())
     else:
@@ -176,56 +196,66 @@ async def show_balance(message: types.Message):
     )
     await message.answer(balance_text, parse_mode="Markdown")
 
-# --- СКРЫТАЯ АДМИНКА ПО КОМАНДЕ /admin ---
+# --- ЛОВИМ ДАННЫЕ ИЗ ВЕБ-САЙТА (ОТКРЫТИЕ КЕЙСА) ---
+@dp.message(F.web_app_data)
+async def handle_webapp_data(message: types.Message):
+    user_id = message.from_user.id
+    
+    try:
+        # Сайт вернет json с инфой о кейсе и дропе
+        data = json.loads(message.web_app_data.data)
+        case_cost = int(data.get("case_cost", 0))    # Цена кейса
+        dropped_item = data.get("item_name", "Скин") # Название скина
+        item_price = int(data.get("item_price", 0))  # Стоимость скина в голде
+        
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        
+        # Проверяем, хватает ли у юзера голды на открытие кейса
+        cursor.execute("SELECT balance FROM users WHERE user_id = ?", (user_id,))
+        balance = cursor.fetchone()[0]
+        
+        if balance < case_cost:
+            await message.answer("❌ **Ошибка!** У вас недостаточно голды на балансе для открытия этого кейса!")
+            conn.close()
+            return
+            
+        # Списываем стоимость кейса и сразу зачисляем голду за скин (авто-продажа скина боту)
+        # Если хочешь, чтобы скин падал в инвентарь, а не продавался сразу, уберем `+ item_price`
+        new_balance = balance - case_cost + item_price
+        cursor.execute("UPDATE users SET balance = ? WHERE user_id = ?", (new_balance, user_id))
+        conn.commit()
+        conn.close()
+        
+        # Добавляем действие в инвентарь на всякий случай
+        add_to_inventory(user_id, dropped_item, item_price)
+        
+        result_text = (
+            f"🎰 **Кейс успешно открыт!**\n\n"
+            f"📉 Списано за кейс: -{case_cost} голды\n"
+            f"🎉 Вы задропали: **{dropped_item}**\n"
+            f"💰 Авто-продажа скина: +{item_price} голды!\n\n"
+            f"💳 Текущий баланс: **{new_balance} голды**"
+        )
+        await message.answer(result_text, parse_mode="Markdown")
+        
+    except Exception as e:
+        logging.error(f"Ошибка WebApp данных: {e}")
+        await message.answer("⚠️ Произошла ошибка при обработке открытия кейса.")
+
+# --- Остальные команды (Админка, Промокоды, Рефералка) ---
 @dp.message(Command("admin"))
 async def admin_panel(message: types.Message):
-    if message.from_user.id != ADMIN_ID:
-        return
-    
+    if message.from_user.id != ADMIN_ID: return
     all_users = get_all_users()
-    total_users = len(all_users)
-    
-    await message.answer("📊 *Сбор статистики рассылки... Подожди секунду*")
-    
-    blocked_users = 0
-    for u_id in all_users:
-        try:
-            await bot.send_chat_action(chat_id=u_id, action="typing")
-        except Exception:
-            blocked_users += 1
-            
-    active_users = total_users - blocked_users
-    
-    admin_text = (
-        "👑 **Панель Администратора StandHub**\n\n"
-        f"📊 **Статистика бота:**\n"
-        f"• Всего пользователей в базе: `{total_users}`\n"
-        f"• Активные (живые): `{active_users}`\n"
-        f"• Заблокировали бота (мертвые): `{blocked_users}`\n\n"
-        "⚙️ **Доступные команды:**\n"
-        "👉 `/send_all Текст` — запустить рассылку\n"
-        "👉 `/create_promo сумма активации` — создать промокод (Пример: `/create_promo 15 50` создаст промокод на 15 голды для 50 человек)"
-    )
-    await message.answer(admin_text, parse_mode="Markdown")
+    await message.answer(f"👑 **Панель Администратора**\n\nВсего пользователей: `{len(all_users)}`\n\n`/create_promo [голда] [активации]`\n`/send_all [текст]`")
 
-# --- Создание промокода (Только для тебя) ---
 @dp.message(lambda message: message.text and message.text.startswith('/create_promo'))
 async def cmd_create_promo(message: types.Message):
-    if message.from_user.id != ADMIN_ID:
-        return
-        
+    if message.from_user.id != ADMIN_ID: return
     args = message.text.split()
-    if len(args) < 3:
-        await message.answer("❌ Ошибка! Формат команды: `/create_promo [сколько_голды] [кол_во_активаций]`\nПример: `/create_promo 20 100`")
-        return
-        
-    try:
-        reward = int(args[1])
-        max_acts = int(args[2])
-    except ValueError:
-        await message.answer("❌ Сумма и активации должны быть числами!")
-        return
-        
+    if len(args) < 3: return
+    reward, max_acts = int(args[1]), int(args[2])
     code = "SH-" + "".join(random.choices(string.ascii_uppercase + string.digits, k=5))
     
     conn = sqlite3.connect(DB_NAME)
@@ -233,120 +263,74 @@ async def cmd_create_promo(message: types.Message):
     cursor.execute("INSERT INTO promo_codes (code, reward, max_activations) VALUES (?, ?, ?)", (code, reward, max_acts))
     conn.commit()
     conn.close()
-    
-    await message.answer(f"✅ **Промокод успешно создан!**\n\n🎫 Код: `{code}`\n💰 Награда: **{reward} голды**\n👥 Макс. активаций: **{max_acts}**")
+    await message.answer(f"✅ Промокод создан: `{code}` на {reward} голды ({max_acts} акт.)")
 
-# --- Кнопка "🎁 Промокод" (Ввод юзером) ---
 @dp.message(F.text == "🎁 Промокод")
 async def promo_code_menu(message: types.Message):
     if not await check_subscription(message.from_user.id): return
-    await message.answer("🎟 **Активация промокода**\n\nОтправь мне промокод прямо в этот чат:")
+    await message.answer("🎟 Отправь мне промокод прямо в этот чат:")
 
-# --- Исправленная активация промокода с явным уведомлением о подписке ---
 @dp.message(lambda message: message.text and message.text.startswith('SH-'))
 async def activate_promo(message: types.Message):
     user_id = message.from_user.id
-    
-    # Если юзер не подписан на канал — бот сразу скажет об этом и не даст голду
     if not await check_subscription(user_id): 
-        await message.answer("🛑 **Активация невозможна!**\n\nВы должны быть подписаны на наш официальный канал, чтобы активировать промокоды!")
+        await message.answer("🛑 Вы должны быть подписаны на канал!")
         return
-        
     code = message.text.strip()
-    
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    
     cursor.execute("SELECT reward, max_activations, current_activations FROM promo_codes WHERE code = ?", (code,))
     promo = cursor.fetchone()
-    
     if not promo:
-        await message.answer("❌ Такого промокода не существует или он введен неверно!")
+        await message.answer("❌ Промокод не найден!")
         conn.close()
         return
-        
     reward, max_acts, curr_acts = promo
-    
     cursor.execute("SELECT user_id FROM user_promos WHERE user_id = ? AND code = ?", (user_id, code))
-    already_used = cursor.fetchone()
-    
-    if already_used:
-        await message.answer("❌ Ты уже активировал этот промокод!")
+    if cursor.fetchone():
+        await message.answer("❌ Уже активирован!")
     elif curr_acts >= max_acts:
-        await message.answer("😢 К сожалению, этот промокод уже закончился!")
+        await message.answer("😢 Закончился!")
     else:
         cursor.execute("UPDATE users SET balance = balance + ? WHERE user_id = ?", (reward, user_id))
         cursor.execute("UPDATE promo_codes SET current_activations = current_activations + 1 WHERE code = ?", (code,))
         cursor.execute("INSERT INTO user_promos (user_id, code) VALUES (?, ?)", (user_id, code))
         conn.commit()
-        await message.answer(f"🎉 **Успех!** Промокод `{code}` активирован! Тебе начислено **{reward} голды**! 🔥")
-        
+        await message.answer(f"🎉 Начислено **{reward} голды**!")
     conn.close()
 
-# --- Кнопки меню ---
 @dp.message(F.text == "👥 Рефералка")
 async def referral_menu(message: types.Message):
     if not await check_subscription(message.from_user.id): return
     user_id = message.from_user.id
     bot_info = await bot.get_me()
-    ref_link = f"https://t.me/{bot_info.username}?start={user_id}"
     user_data = get_user_data(user_id)
-    
-    ref_text = (
-        "👥 **Реферальная система StandHub**\n\n"
-        f"🔗 **Твоя ссылка для приглашений:**\n`{ref_link}`\n\n"
-        f"📊 У тебя приглашено друзей: **{user_data['referrals_count']}**\n\n"
-        "За каждого друга ты получаешь голду! Для вывода нужно пригласить минимум 5 друзей."
-    )
-    await message.answer(ref_text, parse_mode="Markdown")
+    await message.answer(f"🔗 Ссылка: `https://t.me/{bot_info.username}?start={user_id}`\n👥 Друзей: {user_data['referrals_count']}")
 
 @dp.message(F.text == "💰 Вывод голды")
 async def withdraw_gold(message: types.Message):
     if not await check_subscription(message.from_user.id): return
     user_id = message.from_user.id
     user_data = get_user_data(user_id)
-    user_balance = user_data['balance']
-    user_referrals = user_data['referrals_count']
-    
-    if user_balance < 50 or user_referrals < 5:
-        error_text = (
-            "❌ **Отказ в выводе средств**\n\n"
-            "Для вывода голды должны быть выполнены **оба условия**:\n"
-            "1. Минимальный баланс: **50 голды**\n"
-            "2. Минимальное количество рефералов: **5 друзей**\n\n"
-            f"📊 Твои текущие показатели:\n"
-            f"• Баланс: {user_balance} голды\n"
-            f"• Рефералы: {user_referrals} / 5 друзей"
-        )
-        await message.answer(error_text, parse_mode="Markdown")
+    if user_data['balance'] < 50 or user_data['referrals_count'] < 5:
+        await message.answer("❌ Нужно минимум 50 голды и 5 рефералов!")
     else:
-        await message.answer("✅ Введите ваш ID в Standoff 2 для получения голды:")
+        await message.answer("✅ Введите ваш ID в Standoff 2:")
 
 @dp.message(F.text == "❓ Помощь")
 async def help_command(message: types.Message):
-    if not await check_subscription(message.from_user.id): return
-    help_text = f"🛠 **Поддержка StandHub**\n\nЕсли у вас возникли вопросы, проблемы с выводом или вы нашли баг, пишите нашему админу: {SUPPORT_USERNAME}"
-    await message.answer(help_text)
+    await message.answer(f"🛠 Саппорт: {SUPPORT_USERNAME}")
 
-# --- Рассылка по всей базе ---
 @dp.message(lambda message: message.text and message.text.startswith('/send_all'))
 async def admin_broadcast(message: types.Message):
     if message.from_user.id != ADMIN_ID: return
-    broadcast_text = message.text.replace('/send_all', '').strip()
-    if not broadcast_text: return
-        
-    all_users = get_all_users()
-    success_count = 0
-    for u_id in all_users:
-        try:
-            await bot.send_message(chat_id=u_id, text=broadcast_text)
-            success_count += 1
-        except Exception: pass
-    await message.answer(f"📢 Рассылка завершена!\n✅ Отправлено: {success_count} пользователям.")
+    text = message.text.replace('/send_all', '').strip()
+    if not text: return
+    for u_id in get_all_users():
+        try: await bot.send_message(chat_id=u_id, text=text)
+        except: pass
 
-async def main():
-    await dp.start_polling(bot)
-
+async def main(): await dp.start_polling(bot)
 if __name__ == "__main__":
     import asyncio
     asyncio.run(main())
