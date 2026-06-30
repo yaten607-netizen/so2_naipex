@@ -3,137 +3,329 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>StandHub Cases</title>
+    <title>StandHub - Магазин Кейсов</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     
     <style>
-        /* --- ИГРОВОЙ СТИЛЬ (CSS) --- */
+        /* --- ГЕЙМЕРСКИЙ ИНТЕРФЕЙС --- */
         body {
-            background-color: #0d0e12; /* Глубокий темный фон */
+            background-color: #0b0c10;
             color: #ffffff;
             font-family: 'Arial', sans-serif;
-            text-align: center;
             margin: 0;
-            padding: 20px;
+            padding: 15px;
+            text-align: center;
+            -webkit-user-select: none;
         }
 
         h1 {
-            color: #ff9a00; /* Фирменный оранжевый цвет Standoff */
-            text-shadow: 0 0 10px rgba(255, 154, 0, 0.5);
-            font-size: 24px;
+            color: #ff9a00;
+            font-size: 22px;
+            text-shadow: 0 0 15px rgba(255, 154, 0, 0.4);
+            margin-bottom: 5px;
         }
 
-        /* Карточка кейса */
-        .case-container {
-            background: linear-gradient(135deg, #161920, #20242f);
-            border: 2px solid #2b313e;
-            border-radius: 12px;
-            padding: 20px;
-            max-width: 300px;
-            margin: 30px auto;
-            box-shadow: 0 8px 20px rgba(0,0,0,0.5);
+        .subtitle {
+            color: #7f8c8d;
+            font-size: 14px;
+            margin-bottom: 20px;
         }
 
-        .case-name {
-            font-size: 20px;
-            font-weight: bold;
-            margin-bottom: 10px;
+        /* --- ВЫБОР КЕЙСА (ГЛАВНЫЙ ЭКРАН) --- */
+        .cases-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            max-width: 400px;
+            margin: 0 auto;
         }
 
-        .case-price {
-            color: #4caf50; /* Зеленый цвет для цены */
-            font-size: 18px;
-            margin-bottom: 15px;
-        }
-
-        /* Геймерская неоновая кнопка */
-        .btn-open {
-            background: linear-gradient(90deg, #ff512f, #dd2476);
-            color: white;
-            border: none;
-            padding: 12px 30px;
-            font-size: 16px;
-            font-weight: bold;
-            border-radius: 25px;
+        .case-card {
+            background: linear-gradient(135deg, #1f2430, #161920);
+            border: 2px solid #2c3242;
+            border-radius: 14px;
+            padding: 15px;
             cursor: pointer;
-            box-shadow: 0 0 15px rgba(221, 36, 118, 0.4);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
             transition: 0.2s;
         }
 
-        .btn-open:active {
-            transform: scale(0.95); /* Эффект нажатия */
+        .case-card:active {
+            transform: scale(0.95);
         }
 
-        /* Окно с результатом дропа */
-        #result-box {
-            margin-top: 20px;
-            font-size: 18px;
+        .case-card img {
+            width: 85%;
+            height: auto;
+            margin-bottom: 10px;
+        }
+
+        .case-title {
+            font-size: 16px;
             font-weight: bold;
-            min-height: 40px;
+        }
+
+        .case-cost {
+            color: #4caf50;
+            font-weight: bold;
+            margin-top: 5px;
+            font-size: 14px;
+        }
+
+        /* --- ЭКРАН РУЛЕТКИ (СКРЫТ ПО УМОЛЧАНИЮ) --- */
+        #roulette-screen {
+            display: none;
+            max-width: 500px;
+            margin: 0 auto;
+        }
+
+        /* Окно рулетки */
+        .roulette-wrapper {
+            position: relative;
+            width: 100%;
+            height: 130px;
+            background-color: #11141a;
+            border: 2px solid #ff9a00;
+            border-radius: 12px;
+            margin: 30px 0;
+            overflow: hidden; /* Прячем вылезающие скины */
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
+        }
+
+        /* Красная линия по центру */
+        .pointer {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 4px;
+            height: 100%;
+            background-color: #e74c3c;
+            z-index: 10;
+            box-shadow: 0 0 10px #e74c3c;
+        }
+
+        /* Длинная лента со скинами, которая будет ехать */
+        .tape {
+            display: flex;
+            position: absolute;
+            left: 0;
+            top: 15px;
+            height: 100px;
+            transition: transform 5s cubic-bezier(0.1, 0.8, 0.1, 1); /* Плавное замедление */
+            will-change: transform;
+        }
+
+        /* Карточка скина внутри ленты */
+        .item-card {
+            width: 100px;
+            height: 100px;
+            background: #1c1f26;
+            margin: 0 5px;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            padding: 5px;
+            box-sizing: border-box;
+            border-bottom: 4px solid #fff; /* Цвет редкости */
+        }
+
+        .item-card img {
+            width: 60px;
+            height: auto;
+        }
+
+        /* Цвета редкостей Standoff */
+        .arcana { border-bottom-color: #e74c3c; background: radial-gradient(circle, #3a1c1c, #1c1f26); }
+        .legendary { border-bottom-color: #9b59b6; background: radial-gradient(circle, #2b1a3a, #1c1f26); }
+        .rare { border-bottom-color: #3498db; background: radial-gradient(circle, #1a2a3a, #1c1f26); }
+
+        .btn-action {
+            background: linear-gradient(90deg, #ff9a00, #ff512f);
+            color: white;
+            border: none;
+            padding: 14px 40px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 30px;
+            cursor: pointer;
+            box-shadow: 0 5px 15px rgba(255, 81, 47, 0.4);
+        }
+
+        .btn-back {
+            background: #2c3242;
+            color: #bdc3c7;
+            border: none;
+            padding: 8px 20px;
+            margin-top: 20px;
+            border-radius: 20px;
+            cursor: pointer;
         }
     </style>
 </head>
 <body>
 
-    <h1>🎰 КЕЙСЫ STANDHUB</h1>
-    <p>Испытай свою удачу прямо сейчас!</p>
-
-    <div class="case-container">
-        <div class="case-name">🔥 Weapon Case</div>
-        <div class="case-price">Цена: 100 Голды</div>
-        <button class="btn-open" onclick="openCase()">ОТКРЫТЬ КЕЙС</button>
+    <!-- ================= ЭКРАН ВЫБОР КЕЙСА ================= -->
+    <div id="main-screen">
+        <h1>🎰 МАГАЗИН КЕЙСОВ</h1>
+        <p class="subtitle">Выбирай кейс и выбивай топовый дроп!</p>
+        
+        <div class="cases-grid">
+            <!-- Кейс 1 -->
+            <div class="case-card" onclick="selectCase('fire')">
+                <!-- Картинка кейса (заглушка, можно заменить на свою) -->
+                <img src="https://img.icons8.com/isometric/512/magic-box.png" alt="Fire Case">
+                <div class="case-title">🔥 Fire Case</div>
+                <div class="case-cost">100 Голды</div>
+            </div>
+            <!-- Кейс 2 -->
+            <div class="case-card" onclick="selectCase('knife')">
+                <img src="https://img.icons8.com/isometric/512/chest.png" alt="Knife Case">
+                <div class="case-title">🔪 Knife Case</div>
+                <div class="case-cost">500 Голды</div>
+            </div>
+        </div>
     </div>
 
-    <div id="result-box"></div>
+    <!-- ================= ЭКРАН РУЛЕТКИ ================= -->
+    <div id="roulette-screen">
+        <h1 id="roulette-title">Открытие кейса</h1>
+        
+        <div class="roulette-wrapper">
+            <div class="pointer"></div>
+            <div class="tape" id="tape"></div>
+        </div>
 
+        <button class="btn-action" id="spin-btn" onclick="startRoulette()">КРУТИТЬ</button>
+        <br>
+        <button class="btn-back" id="back-btn" onclick="toMainScreen()">⬅ Назад к кейсам</button>
+    </div>
+
+    <!-- ================= ЛОГИКА (JAVASCRIPT) ================= -->
     <script>
-        // Инициализируем WebApp Телеграма
         const tg = window.Telegram.WebApp;
-        tg.expand(); // Разворачиваем сайт на весь экран телефона
+        tg.expand();
 
-        // Наш список предметов, цены и ШАНСЫ (ценность)
-        // Чем больше вес (weight), тем выше шанс, что выпадет этот предмет
-        const dropList = [
-            { name: "🔪 Karambit | Scratch", price: 1500, weight: 5 },   // Редкий дроп (Шанс 5%)
-            { name: "🔫 M4 | Necromancer", price: 350, weight: 15 },    // Средний дроп (Шанс 15%)
-            { name: "🔫 AKR | Tiger", price: 120, weight: 30 },         // Обычный дроп (Шанс 30%)
-            { name: "🔫 G22 | Nest", price: 20, weight: 50 }            // Часто выпадает (Шанс 50%)
-        ];
+        let currentCase = null;
 
-        function openCase() {
-            const resultBox = document.getElementById("result-box");
-            resultBox.innerHTML = "🎰 Крутим рулетку...";
+        // НАСТРОЙКА ДРОПА, ЦЕННОСТИ И ШАНСОВ (WEIGHT)
+        // Чем больше weight, тем выше шанс. У ножей шанс маленький!
+        const casesData = {
+            fire: {
+                title: "🔥 Fire Case",
+                cost: 100,
+                items: [
+                    { name: "M4 | Necromancer", price: 300, rarity: "arcana", weight: 10, img: "https://img.icons8.com/emoji/96/submachine-gun.png" },
+                    { name: "AKR | Tiger", price: 120, rarity: "legendary", weight: 30, img: "https://img.icons8.com/emoji/96/rifle.png" },
+                    { name: "G22 | Nest", price: 15, rarity: "rare", weight: 60, img: "https://img.icons8.com/emoji/96/pistol.png" }
+                ]
+            },
+            knife: {
+                title: "🔪 Knife Case",
+                cost: 500,
+                items: [
+                    { name: "Karambit | Scratch", price: 1500, rarity: "arcana", weight: 5, img: "https://img.icons8.com/color/96/dagger.png" },
+                    { name: "Butterfly | Legacy", price: 1100, rarity: "arcana", weight: 10, img: "https://img.icons8.com/color/96/hunting-knife.png" },
+                    { name: "jCommando | Reaper", price: 400, rarity: "legendary", weight: 85, img: "https://img.icons8.com/color/96/kitchen-knife.png" }
+                ]
+            }
+        };
 
-            // Алгоритм выбора предмета с учетом шансов (ценности)
+        // Выбор кейса на главном экране
+        function selectCase(caseKey) {
+            currentCase = casesData[caseKey];
+            document.getElementById("main-screen").style.display = "none";
+            document.getElementById("roulette-screen").style.display = "block";
+            document.getElementById("roulette-title").innerText = currentCase.title;
+            
+            generateTape(); // Сразу генерируем забитую скинами ленту
+        }
+
+        // Возврат назад
+        function toMainScreen() {
+            document.getElementById("main-screen").style.display = "block";
+            document.getElementById("roulette-screen").style.display = "none";
+            resetTape();
+        }
+
+        // Генерация скинов в ленте перед прокруткой
+        function generateTape() {
+            const tape = document.getElementById("tape");
+            tape.innerHTML = "";
+            
+            // Забиваем ленту 40 случайными скинами для видимости прокрутки
+            for (let i = 0; i < 45; i++) {
+                const randomItem = currentCase.items[Math.floor(Math.random() * currentCase.items.length)];
+                const card = document.createElement("div");
+                card.className = `item-card ${randomItem.rarity}`;
+                card.innerHTML = `<img src="${randomItem.img}"><br><b>${randomItem.name}</b>`;
+                tape.appendChild(card);
+            }
+        }
+
+        function resetTape() {
+            const tape = document.getElementById("tape");
+            tape.style.transition = "none";
+            tape.style.transform = "translateX(0px)";
+        }
+
+        // Запуск анимации крутилки
+        function startRoulette() {
+            document.getElementById("spin-btn").disabled = true;
+            document.getElementById("back-btn").style.display = "none";
+            
+            resetTape();
+            
+            // Выбираем финальный выигрыш на основе ШАНСОВ (веса предметов)
             let totalWeight = 0;
-            dropList.forEach(item => totalWeight += item.weight);
-
+            currentCase.items.forEach(item => totalWeight += item.weight);
+            
             let randomNum = Math.floor(Math.random() * totalWeight);
-            let selectedItem = null;
-
-            for (let i = 0; i < dropList.length; i++) {
-                randomNum -= dropList[i].weight;
+            let winningItem = currentCase.items[0];
+            
+            for (let i = 0; i < currentCase.items.length; i++) {
+                randomNum -= currentCase.items[i].weight;
                 if (randomNum < 0) {
-                    selectedItem = dropList[i];
+                    winningItem = currentCase.items[i];
                     break;
                 }
             }
 
-            // Имитируем крутилку (задержка 1.5 секунды)
+            // Ставим наш выигранный скин ровно в 37-ю ячейку нашей ленты
+            const tape = document.getElementById("tape");
+            const cards = tape.getElementsByClassName("item-card");
+            cards[37].className = `item-card ${winningItem.rarity}`;
+            cards[37].innerHTML = `<img src="${winningItem.img}"><br><b>${winningItem.name}</b>`;
+
+            // Рассчитываем сдвиг ленты, чтобы 37-й элемент встал ровно по центру
+            // Ширина карточки 100px + 10px отступы. 
+            // Добавляем случайный сдвиг внутри карточки (от 5 до 95px), чтобы стрелка не останавливалась всегда в одном месте!
+            const cardWidth = 110; 
+            const centerOffset = window.innerWidth / 2 - 55;
+            const randomInCard = Math.floor(Math.random() * 80) + 10;
+            const finalScroll = (37 * cardWidth) - centerOffset + randomInCard;
+
+            // Запускаем движение ленты
             setTimeout(() => {
-                // Показываем игроку, что он выбил
-                resultBox.innerHTML = `🎉 Выпало: <span style="color: #ff9a00;">${selectedItem.name}</span> (${selectedItem.price} голды)`;
+                tape.style.transition = "transform 5s cubic-bezier(0.1, 0.8, 0.1, 1)";
+                tape.style.transform = `translateX(-${finalScroll}px)`;
+            }, 50);
 
-                // Формируем данные для отправки обратно в нашего Python-бота
+            // Ждем завершения анимации (5 секунд)
+            setTimeout(() => {
+                // Передаем данные обратно в бота
                 const webAppData = {
-                    case_cost: 100, // Списываем 100 за открытие
-                    item_name: selectedItem.name,
-                    item_price: selectedItem.price
+                    case_cost: currentCase.cost,
+                    item_name: winningItem.name,
+                    item_price: winningItem.price
                 };
-
-                // Отправляем данные в бота и автоматически закрываем сайт
-                tg.sendData(json.stringify(webAppData));
-            }, 1500); 
+                
+                // Отправляем в Telegram-бот
+                tg.sendData(JSON.stringify(webAppData));
+            }, 5300);
         }
     </script>
 </body>
