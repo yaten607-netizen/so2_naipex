@@ -2,6 +2,7 @@ import logging
 import sqlite3
 import random
 import string
+import os
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart, Command
 from aiogram.utils.keyboard import ReplyKeyboardBuilder, InlineKeyboardBuilder
@@ -19,7 +20,9 @@ SUPPORT_USERNAME = "@fr7gment" # Твой саппорт юз
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
-DB_NAME = "database.db"
+
+# Путь к базе данных в папку /tmp, чтобы данные не слетали при деплое
+DB_NAME = os.path.join("/tmp", "database.db")
 
 def init_db():
     conn = sqlite3.connect(DB_NAME)
@@ -105,13 +108,13 @@ async def check_subscription(user_id: int) -> bool:
 # --- Клавиатуры ---
 def get_main_menu():
     builder = ReplyKeyboardBuilder()
+    builder.button(text="💰 Баланс")
     builder.button(text="💰 Вывод голды")
     builder.button(text="🎁 Промокод")
     builder.button(text="👥 Рефералка")
     builder.button(text="❓ Помощь")
-    # Тут теперь стоит чистый Гугл, реклама A_ToolsX вылезать не будет!
     builder.button(text="🎰 Открыть Кейсы", web_app=types.WebAppInfo(url="https://google.com"))
-    builder.adjust(2, 2, 1)
+    builder.adjust(1, 2, 2, 1) # Красивое распределение кнопок в меню
     return builder.as_markup(resize_keyboard=True)
 
 def get_sub_keyboard():
@@ -151,6 +154,21 @@ async def callback_check_sub(call: types.CallbackQuery):
         await call.message.delete()
     else:
         await call.answer("❌ Ты всё ещё не подписался на канал!", show_alert=True)
+
+# --- Кнопка "💰 Баланс" ---
+@dp.message(F.text == "💰 Баланс")
+async def show_balance(message: types.Message):
+    if not await check_subscription(message.from_user.id): return
+    user_id = message.from_user.id
+    user_data = get_user_data(user_id)
+    
+    balance_text = (
+        "💳 **Твой игровой профиль:**\n\n"
+        f"💰 Баланс: **{user_data['balance']} голды**\n"
+        f"👥 Приглашено друзей: **{user_data['referrals_count']}**\n\n"
+        "Зарабатывай голду в кейсах или приглашая друзей по реферальной ссылке! 🚀"
+    )
+    await message.answer(balance_text, parse_mode="Markdown")
 
 # --- СКРЫТАЯ АДМИНКА ПО КОМАНДЕ /admin ---
 @dp.message(Command("admin"))
