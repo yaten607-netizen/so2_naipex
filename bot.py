@@ -25,7 +25,7 @@ DB_DIR = "/app/data"
 DB_NAME = os.path.join(DB_DIR, "database.db")
 
 def init_db():
-    # Создаем папку /app/data, если она вдруг не создалась автоматически
+    # Создаем папку /app/data, если её ещё нет
     if not os.path.exists(DB_DIR):
         os.makedirs(DB_DIR, exist_ok=True)
         
@@ -106,21 +106,22 @@ async def check_subscription(user_id: int) -> bool:
         logging.error(f"Ошибка проверки подписки для {user_id}: {e}")
         return False
 
-# --- Главное Меню (Кейсы в самом верху) ---
+# --- Главное Меню (Идеальный порядок кнопок) ---
 def get_main_menu():
     builder = ReplyKeyboardBuilder()
     
-    # Кнопка кейсов на всю ширину сверху
+    # Слой 1: Кейсы в самом верху
     builder.button(text="🎰 Открыть Кейсы", web_app=types.WebAppInfo(url="https://google.com"))
-    
-    # Остальные кнопки ниже
+    # Слой 2: Баланс на всю ширину под кейсами
     builder.button(text="💰 Баланс")
+    
+    # Остальные кнопки в ряд по 2 штуки
     builder.button(text="💰 Вывод голды")
     builder.button(text="🎁 Промокод")
     builder.button(text="👥 Рефералка")
     builder.button(text="❓ Помощь")
     
-    builder.adjust(1, 2, 2, 1) 
+    builder.adjust(1, 1, 2, 2) 
     return builder.as_markup(resize_keyboard=True)
 
 def get_sub_keyboard():
@@ -241,10 +242,16 @@ async def promo_code_menu(message: types.Message):
     if not await check_subscription(message.from_user.id): return
     await message.answer("🎟 **Активация промокода**\n\nОтправь мне промокод прямо в этот чат:")
 
+# --- Исправленная активация промокода с явным уведомлением о подписке ---
 @dp.message(lambda message: message.text and message.text.startswith('SH-'))
 async def activate_promo(message: types.Message):
-    if not await check_subscription(message.from_user.id): return
     user_id = message.from_user.id
+    
+    # Если юзер не подписан на канал — бот сразу скажет об этом и не даст голду
+    if not await check_subscription(user_id): 
+        await message.answer("🛑 **Активация невозможна!**\n\nВы должны быть подписаны на наш официальный канал, чтобы активировать промокоды!")
+        return
+        
     code = message.text.strip()
     
     conn = sqlite3.connect(DB_NAME)
