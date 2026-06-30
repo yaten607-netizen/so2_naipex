@@ -6,16 +6,16 @@ from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart, Command
 from aiogram.utils.keyboard import ReplyKeyboardBuilder, InlineKeyboardBuilder
 
+# Включаем логи, чтобы видеть работу бота в консоли Railway
 logging.basicConfig(level=logging.INFO)
 
+# ================= ТВОИ НАСТРОЙКИ ВШИТЫ НАМЕРТВО =================
 BOT_TOKEN = "8802875670:AAFIKoKmaRtmSh8wL32mMKkIiLObKYqSpTw"
-
-# ================= ТВОИ НАСТРОЙКИ ВШИТЫ СЮДА =================
 ADMIN_ID = 5376742900          # Твой личный Telegram ID
 CHANNEL_ID = -1003940562373    # ID твоего канала для проверки подписки
 CHANNEL_URL = "https://t.me/standhub_channel" # Ссылка для кнопки подписки
 SUPPORT_USERNAME = "@fr7gment" # Твой саппорт юз
-# =============================================================
+# =================================================================
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
@@ -54,7 +54,7 @@ def init_db():
     conn.commit()
     conn.close()
 
-# --- Функции БД ---
+# --- Функции Базы Данных ---
 def add_user(user_id, username, referrer_id=None):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
@@ -89,16 +89,17 @@ def get_all_users():
 
 init_db()
 
-# --- Проверка подписки по ID канала ---
+# --- Надежная проверка подписки ---
 async def check_subscription(user_id: int) -> bool:
     if user_id == ADMIN_ID:
         return True
     try:
         member = await bot.get_chat_member(chat_id=CHANNEL_ID, user_id=user_id)
-        if member.status in ["member", "administrator", "creator"]:
+        if member.status in ["member", "administrator", "creator", "restricted"]:
             return True
         return False
-    except Exception:
+    except Exception as e:
+        logging.error(f"Ошибка проверки подписки для {user_id}: {e}")
         return False
 
 # --- Клавиатуры ---
@@ -108,6 +109,7 @@ def get_main_menu():
     builder.button(text="🎁 Промокод")
     builder.button(text="👥 Рефералка")
     builder.button(text="❓ Помощь")
+    # Тут теперь стоит чистый Гугл, реклама A_ToolsX вылезать не будет!
     builder.button(text="🎰 Открыть Кейсы", web_app=types.WebAppInfo(url="https://google.com"))
     builder.adjust(2, 2, 1)
     return builder.as_markup(resize_keyboard=True)
@@ -119,7 +121,7 @@ def get_sub_keyboard():
     builder.adjust(1)
     return builder.as_markup()
 
-# --- Обработка /start ---
+# --- Обработка команды /start ---
 @dp.message(CommandStart())
 async def cmd_start(message: types.Message):
     user_id = message.from_user.id
@@ -141,7 +143,7 @@ async def cmd_start(message: types.Message):
             reply_markup=get_sub_keyboard()
         )
 
-# --- Коллбэк проверки подписки ---
+# --- Кнопка проверки подписки ---
 @dp.callback_query(F.data == "check_sub")
 async def callback_check_sub(call: types.CallbackQuery):
     if await check_subscription(call.from_user.id):
@@ -182,7 +184,7 @@ async def admin_panel(message: types.Message):
     )
     await message.answer(admin_text, parse_mode="Markdown")
 
-# --- Создание промокода (Только для тебя, админа) ---
+# --- Создание промокода (Только для тебя) ---
 @dp.message(lambda message: message.text and message.text.startswith('/create_promo'))
 async def cmd_create_promo(message: types.Message):
     if message.from_user.id != ADMIN_ID:
@@ -296,7 +298,7 @@ async def help_command(message: types.Message):
     help_text = f"🛠 **Поддержка StandHub**\n\nЕсли у вас возникли вопросы, проблемы с выводом или вы нашли баг, пишите нашему админу: {SUPPORT_USERNAME}"
     await message.answer(help_text)
 
-# --- Рассылка ---
+# --- Рассылка по всей базе ---
 @dp.message(lambda message: message.text and message.text.startswith('/send_all'))
 async def admin_broadcast(message: types.Message):
     if message.from_user.id != ADMIN_ID: return
