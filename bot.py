@@ -1,5 +1,6 @@
 import logging
 import sqlite3
+import os
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart
 from aiogram.utils.keyboard import ReplyKeyboardBuilder
@@ -13,8 +14,10 @@ BOT_TOKEN = "8802875670:AAFIKoKmaRtmSh8wL32mMKkIiLObKYqSpTw"
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# === РАБОТА С БАЗОЙ ДАННЫХ (SQLite) ===
-DB_NAME = "database.db"
+# === ПРАВИЛЬНЫЙ ПУТЬ К БАЗЕ ДАННЫХ ===
+# Берем папку, в которой лежит сам bot.py, чтобы Railway не ругался на права доступа
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_NAME = os.path.join(BASE_DIR, "database.db")
 
 def init_db():
     """Создает таблицу пользователей, если её еще нет"""
@@ -33,28 +36,22 @@ def init_db():
     conn.close()
 
 def add_user(user_id, username, referrer_id=None):
-    """Добавляет нового пользователя, если его нет в базе. 
-    Если пришел по рефералке — начисляет реферала пригласителю."""
+    """Добавляет нового пользователя"""
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     
-    # Проверяем, есть ли уже юзер
     cursor.execute("SELECT user_id FROM users WHERE user_id = ?", (user_id,))
     exists = cursor.fetchone()
     
     if not exists:
-        # Если юзер пришел по ссылке и реферер существует и это не он сам
         if referrer_id and int(referrer_id) != user_id:
             cursor.execute("SELECT user_id FROM users WHERE user_id = ?", (int(referrer_id),))
             ref_exists = cursor.fetchone()
             if ref_exists:
-                # Плюсуем реферала пригласителю
                 cursor.execute(
                     "UPDATE users SET referrals_count = referrals_count + 1 WHERE user_id = ?", 
                     (int(referrer_id),)
                 )
-                # Тут же можно начислить бонусную голду за друга, например +5 голды:
-                # cursor.execute("UPDATE users SET balance = balance + 5 WHERE user_id = ?", (int(referrer_id),))
         else:
             referrer_id = None
             
@@ -91,34 +88,28 @@ init_db()
 
 # === ХЕНДЛЕРЫ БОТА ===
 
-# Главное меню (нижние кнопки)
 def get_main_menu():
     builder = ReplyKeyboardBuilder()
     builder.button(text="💰 Вывод голды")
     builder.button(text="🎁 Промокод")
     builder.button(text="👥 Рефералка")
     builder.button(text="❓ Помощь")
-    
-    # Кнопка для вебки с кейсами
     builder.button(
         text="🎰 Открыть Кейсы", 
         web_app=types.WebAppInfo(url="https://google.com")
     )
-    
     builder.adjust(2, 2, 1)
     return builder.as_markup(resize_keyboard=True)
 
-# 1. Команда /start (с поддержкой реферальных ссылок)
 @dp.message(CommandStart())
 async def cmd_start(message: types.Message):
     user_id = message.from_user.id
     username = message.from_user.username
     
-    # Проверяем, есть ли аргумент рефералки (например /start 1234567)
     start_args = message.text.split()
     referrer_id = start_args[1] if len(start_args) > 1 else None
     
-    # Сохраняем в вечную базу данных
+    # Сохраняем в БД
     add_user(user_id, username, referrer_id)
     
     welcome_text = (
@@ -128,14 +119,12 @@ async def cmd_start(message: types.Message):
     )
     await message.answer(welcome_text, reply_markup=get_main_menu())
 
-# 2. Кнопка: Рефералка
 @dp.message(F.text == "👥 Рефералка")
 async def referral_menu(message: types.Message):
     user_id = message.from_user.id
     bot_info = await bot.get_me()
     ref_link = f"https://t.me/{bot_info.username}?start={user_id}"
     
-    # Берем реальные данные из базы данных!
     user_data = get_user_data(user_id)
     
     ref_text = (
@@ -146,11 +135,9 @@ async def referral_menu(message: types.Message):
     )
     await message.answer(ref_text, parse_mode="Markdown")
 
-# 3. Кнопка "Вывод голды"
 @dp.message(F.text == "💰 Вывод голды")
 async def withdraw_gold(message: types.Message):
     user_id = message.from_user.id
-    # Берем реальный баланс и рефов из БД
     user_data = get_user_data(user_id)
     
     user_balance = user_data['balance']
@@ -170,12 +157,10 @@ async def withdraw_gold(message: types.Message):
     else:
         await message.answer("✅ Отлично! Условия выполнены. Введите ваш ID в Standoff 2 для получения голды:")
 
-# 4. Кнопка "Промокод"
 @dp.message(F.text == "🎁 Промокод")
 async def promo_code(message: types.Message):
     await message.answer("🎟 **Активация промокода**\n\nВведите ваш промокод в ответ на это сообщение:")
 
-# 5. Кнопка "Помощь"
 @dp.message(F.text == "❓ Помощь")
 async def help_command(message: types.Message):
     help_text = (
@@ -187,19 +172,14 @@ async def help_command(message: types.Message):
     )
     await message.answer(help_text)
 
-# Пример команды для рассылки (только для тебя, админа)
-# Напиши в боте: /send_all Привет, у нас технические работы!
 @dp.message(lambda message: message.text and message.text.startswith('/send_all'))
 async def admin_broadcast(message: types.Message):
-    # Тут можно поставить проверку на твой Telegram ID, чтобы обычные юзеры не спамили
-    # if message.from_user.id != ТВОЙ_ID: return
-
     broadcast_text = message.text.replace('/send_all', '').strip()
     if not broadcast_text:
-        await message.answer("❌ Напиши текст рассылки после команды. Пример: `/send_all Текст`")
+        await message.answer("❌ Напиши текст рассылки после команды.")
         return
         
-    all_users = get_all_users() # Достаем ВСЕХ из вечной базы данных
+    all_users = get_all_users()
     success_count = 0
     
     for u_id in all_users:
@@ -207,7 +187,7 @@ async def admin_broadcast(message: types.Message):
             await bot.send_message(chat_id=u_id, text=broadcast_text)
             success_count += 1
         except Exception:
-            pass # Если заблокировал бота, просто пропускаем
+            pass
             
     await message.answer(f"📢 Рассылка завершена!\n✅ Успешно отправлено: {success_count} пользователям.")
 
