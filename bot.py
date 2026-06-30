@@ -7,7 +7,6 @@ from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart, Command
 from aiogram.utils.keyboard import ReplyKeyboardBuilder, InlineKeyboardBuilder
 
-# Включаем логи, чтобы видеть работу бота в консоли Railway
 logging.basicConfig(level=logging.INFO)
 
 # ================= ТВОИ НАСТРОЙКИ ВШИТЫ НАМЕРТВО =================
@@ -21,13 +20,12 @@ SUPPORT_USERNAME = "@fr7gment" # Твой саппорт юз
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# Путь к базе данных в папку /tmp, чтобы данные не слетали при деплое
+# База данных в папке /tmp, чтобы не затиралась при перезапусках кода
 DB_NAME = os.path.join("/tmp", "database.db")
 
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    # Таблица юзеров
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY,
@@ -37,7 +35,6 @@ def init_db():
             referrer_id INTEGER
         )
     """)
-    # Таблица промокодов
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS promo_codes (
             code TEXT PRIMARY KEY,
@@ -46,7 +43,6 @@ def init_db():
             current_activations INTEGER DEFAULT 0
         )
     """)
-    # Таблица активаций
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS user_promos (
             user_id INTEGER,
@@ -92,7 +88,7 @@ def get_all_users():
 
 init_db()
 
-# --- Надежная проверка подписки ---
+# --- Проверка подписки ---
 async def check_subscription(user_id: int) -> bool:
     if user_id == ADMIN_ID:
         return True
@@ -105,16 +101,22 @@ async def check_subscription(user_id: int) -> bool:
         logging.error(f"Ошибка проверки подписки для {user_id}: {e}")
         return False
 
-# --- Клавиатуры ---
+# --- Меню (Кейсы теперь в самом верху) ---
 def get_main_menu():
     builder = ReplyKeyboardBuilder()
+    
+    # 🎰 Кнопка кейсов на всю ширину первой строки
+    builder.button(text="🎰 Открыть Кейсы", web_app=types.WebAppInfo(url="https://google.com"))
+    
+    # Остальные кнопки ниже
     builder.button(text="💰 Баланс")
     builder.button(text="💰 Вывод голды")
     builder.button(text="🎁 Промокод")
     builder.button(text="👥 Рефералка")
     builder.button(text="❓ Помощь")
-    builder.button(text="🎰 Открыть Кейсы", web_app=types.WebAppInfo(url="https://google.com"))
-    builder.adjust(1, 2, 2, 1) # Красивое распределение кнопок в меню
+    
+    # Сетка кнопок: 1 на первой строке (кейсы), остальные по 2 в ряд
+    builder.adjust(1, 2, 2, 1) 
     return builder.as_markup(resize_keyboard=True)
 
 def get_sub_keyboard():
@@ -124,7 +126,7 @@ def get_sub_keyboard():
     builder.adjust(1)
     return builder.as_markup()
 
-# --- Обработка команды /start ---
+# --- Команда /start ---
 @dp.message(CommandStart())
 async def cmd_start(message: types.Message):
     user_id = message.from_user.id
@@ -146,7 +148,6 @@ async def cmd_start(message: types.Message):
             reply_markup=get_sub_keyboard()
         )
 
-# --- Кнопка проверки подписки ---
 @dp.callback_query(F.data == "check_sub")
 async def callback_check_sub(call: types.CallbackQuery):
     if await check_subscription(call.from_user.id):
@@ -202,7 +203,7 @@ async def admin_panel(message: types.Message):
     )
     await message.answer(admin_text, parse_mode="Markdown")
 
-# --- Создание промокода (Только для тебя) ---
+# --- Создание промокода (Только для админа) ---
 @dp.message(lambda message: message.text and message.text.startswith('/create_promo'))
 async def cmd_create_promo(message: types.Message):
     if message.from_user.id != ADMIN_ID:
