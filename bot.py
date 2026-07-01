@@ -1,5 +1,5 @@
 import telebot
-from telebot.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+from telebot.types import ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
 import json
 
 # ================= НАСТРОЙКА БОТА =================
@@ -9,27 +9,24 @@ WEBAPP_URL = "https://ten607-netizen.github.io/so2_naipex/"
 
 bot = telebot.TeleBot(TOKEN)
 
-# --- ГЛАВНОЕ МЕНЮ (НИЖНИЕ КНОПКИ) ---
+# --- ГЛАВНОЕ МЕНЮ (ВСЕ КНОПКИ СНИЗУ) ---
 def get_main_menu():
-    markup = ReplyKeyboardMarkup(resize_keyboard=True, row_width=1)
+    markup = ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    
+    # 1. Главная кнопка на всю ширину — Магазин
     web_app = WebAppInfo(url=WEBAPP_URL)
     btn_shop = KeyboardButton("🎰 ОТКРЫТЬ МАГАЗИН КЕЙСОВ 🎰", web_app=web_app)
+    
+    # 2. Остальные кнопки управления
+    btn_balance = KeyboardButton("💰 Мой Баланс")
+    btn_help = KeyboardButton("ℹ️ Помощь / Правила")
+    btn_ref = KeyboardButton("👥 Рефералы")
+    btn_promo = KeyboardButton("🎁 Промокод")
+    
+    # Собираем меню
     markup.add(btn_shop)
-    return markup
-
-# --- КРАСИВЫЕ ИНЛАЙН-КНОПКИ ПОД СООБЩЕНИЕМ /START ---
-def get_start_inline():
-    markup = InlineKeyboardMarkup(row_width=2)
-    btn_profile = InlineKeyboardButton("👤 Мой Профиль", callback_data="open_profile")
-    btn_help = InlineKeyboardButton("ℹ️ Помощь и Правила", callback_data="open_help")
-    markup.add(btn_profile, btn_help)
-    return markup
-
-# --- КНОПКА НАЗАД ДЛЯ ИНЛАЙН-МЕНЮ ---
-def get_back_inline():
-    markup = InlineKeyboardMarkup()
-    btn_back = InlineKeyboardButton("⬅️ Вернуться в меню", callback_data="back_to_start")
-    markup.add(btn_back)
+    markup.add(btn_balance, btn_help)
+    markup.add(btn_ref, btn_promo)
     return markup
 
 
@@ -41,87 +38,88 @@ def start_command(message):
     welcome_text = (
         f"🔥 *Привет, {user_name}! Добро пожаловать в StandHub!* 🔥\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"🌟 *StandHub* — это продвинутый симулятор открытия кейсов из Standoff 2 прямо внутри Telegram!\n\n"
+        f"🌟 *StandHub* — это лучший симулятор открытия кейсов из Standoff 2 прямо в Telegram!\n\n"
         f"⚡️ Испытай свою удачу, крути рулетку, выбивай Арканы и собирай самый дорогой инвентарь!\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"👇 *Используй понятное меню ниже для управления:* 👇"
+        f"👇 *Все управление находится в кнопках ниже:* 👇"
     )
     
     bot.send_message(
         message.chat.id, 
         welcome_text, 
-        reply_markup=get_start_inline(), 
-        parse_mode="Markdown"
-    )
-    bot.send_message(
-        message.chat.id,
-        "🎒 Чтобы перейти к выбору кейсов, нажми большую кнопку «*ОТКРЫТЬ МАГАЗИН КЕЙСОВ*» в самом низу чата.",
-        reply_markup=get_main_menu(),
+        reply_markup=get_main_menu(), 
         parse_mode="Markdown"
     )
 
 
-# ================= ОБРАБОТКА НАЖАТИЙ НА КНОПКИ (CALLBACK) =================
-@bot.callback_query_handler(func=lambda call: True)
-def handle_callbacks(call):
-    if call.data == "open_profile":
-        profile_text = (
-            f"👤 *ВАШ ИГРОВОЙ ПРОФИЛЬ* 👤\n"
+# ================= ОБРАБОТКА ТЕКСТОВЫХ КНОПОК МЕНЮ =================
+@bot.message_handler(func=lambda message: True)
+def handle_menu_buttons(message):
+    chat_id = message.chat.id
+    
+    # Кнопка: Мой Баланс
+    if message.text == "💰 Мой Баланс":
+        balance_text = (
+            f"💰 *ВАШ БАЛАНС* 💰\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"📝 *Имя игрока:* {call.from_user.first_name}\n"
-            f"🆔 *Ваш ID:* `{call.message.chat.id}`\n\n"
-            f"💰 *Текущий баланс:* `1,000 Голды` 🪙\n"
-            f"🎒 *Предметов в инвентаре:* `0 шт.`\n"
+            f"💵 *Текущий счет:* `1,000 Голды` 🪙\n"
+            f"🎒 *Ваш инвентарь:* `0 предметов`\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"💵 _Баланс уже зачислен! Заходи в магазин и выбивай скины!_"
+            f"🔥 _Стартовый баланс зачислен! Скорее открывай кейсы!_"
         )
-        bot.edit_message_text(
-            chat_id=call.message.chat.id,
-            message_id=call.message.message_id,
-            text=profile_text,
-            reply_markup=get_back_inline(),
-            parse_mode="Markdown"
-        )
+        bot.send_message(chat_id, balance_text, reply_markup=get_main_menu(), parse_mode="Markdown")
         
-    elif call.data == "open_help":
+    # Кнопка: Помощь / Правила
+    elif message.text == "ℹ️ Помощь / Правила":
         help_text = (
-            f"ℹ️ *ИНСТРУКЦИЯ ДЛЯ ИГРОКОВ* ℹ️\n"
+            f"ℹ️ *ПОНЯТНАЯ ИНСТРУКЦИЯ ДЛЯ ИГРОКОВ* ℹ️\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"👉 *Как устроен процесс?*\n"
-            f"1️⃣ Нажми кнопку *🎰 ОТКРЫТЬ МАГАЗИН КЕЙСОВ* в самом низу экрана.\n"
-            f"2️⃣ В открывшемся окне выбери кейс.\n"
+            f"1️⃣ Нажми кнопку *🎰 ОТКРЫТЬ МАГАЗИН КЕЙСОВ* ниже.\n"
+            f"2️⃣ Кликни на любой доступный кейс.\n"
             f"3️⃣ Нажми кнопку *🚀 ИСПЫТАТЬ УДАЧУ*, чтобы запустить рулетку.\n"
             f"4️⃣ После остановки рулетки твой выигрыш мгновенно прилетит сообщением прямо сюда!\n\n"
-            f"💎 *Где взять баланс?*\n"
-            f"Каждому новому пользователю мы дарим стартовые *1,000 Голды*!\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"👑 _Удачи в открытии! Пусть тебе повезет на Gold или Arcana!_"
+            f"💎 Всем новичкам при старте уже выдано *1,000 Голды*!"
         )
-        bot.edit_message_text(
-            chat_id=call.message.chat.id,
-            message_id=call.message.message_id,
-            text=help_text,
-            reply_markup=get_back_inline(),
-            parse_mode="Markdown"
-        )
+        bot.send_message(chat_id, help_text, reply_markup=get_main_menu(), parse_mode="Markdown")
         
-    elif call.data == "back_to_start":
-        user_name = call.from_user.first_name
-        welcome_text = (
-            f"🔥 *Привет, {user_name}! Добро пожаловать в StandHub!* 🔥\n"
+    # Кнопка: Рефералы
+    elif message.text == "👥 Рефералы":
+        ref_text = (
+            f"👥 *РЕФЕРАЛЬНАЯ СИСТЕМА* 👥\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"🌟 *StandHub* — это продвинутый симулятор открытия кейсов из Standoff 2 прямо внутри Telegram!\n\n"
-            f"⚡️ Испытай свою удачу, крути рулетку, выбивай Арканы и собирай самый дорогой инвентарь!\n"
+            f"🔗 *Ваша ссылка для приглашения друзей:*\n"
+            f"https://t.me/ТВОЙ_БОТ?start={chat_id}\n\n"
+            f"🎁 Приглашай друзей и получай по *+250 Голды* за каждого активного игрока!\n"
+            f"📈 Всего приглашено: `0` человек."
+        )
+        bot.send_message(chat_id, ref_text, reply_markup=get_main_menu(), parse_mode="Markdown")
+        
+    # Кнопка: Промокод
+    elif message.text == "🎁 Промокод":
+        promo_text = (
+            f"🎁 *АКТИВАЦИЯ ПРОМОКОДА* 🎁\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"👇 *Используй понятное меню ниже для управления:* 👇"
+            f"👉 Чтобы активировать промокод на голду, отправь его в чат в следующем формате:\n"
+            f"`/promo ТВОЙ_ПРОМОКОД`\n\n"
+            f"📢 Ищи секретные промокоды в нашем официальном канале!"
         )
-        bot.edit_message_text(
-            chat_id=call.message.chat.id,
-            message_id=call.message.message_id,
-            text=welcome_text,
-            reply_markup=get_start_inline(),
-            parse_mode="Markdown"
-        )
+        bot.send_message(chat_id, promo_text, reply_markup=get_main_menu(), parse_mode="Markdown")
+
+
+# ================= КОМАНДА ДЛЯ АКТИВАЦИИ ПРОМОКОДОВ =================
+@bot.message_handler(commands=['promo'])
+def activate_promo(message):
+    # Пример простой логики промокода
+    args = message.text.split()
+    if len(args) < 2:
+        bot.send_message(message.chat.id, "❌ *Ошибка:* Введи промокод! Например: `/promo START`", parse_mode="Markdown")
+        return
+        
+    promo_code = args[1].upper()
+    if promo_code == "START":
+        bot.send_message(message.chat.id, "🎉 *Успех!* Промокод `START` активирован! Вам начислено *+500 Голды*! 🪙", parse_mode="Markdown")
+    else:
+        bot.send_message(message.chat.id, "❌ *Ошибка:* Такого промокода не существует или у него истек срок действия.", parse_mode="Markdown")
 
 
 # ================= ПРИЕМ ДРОПА ИЗ РУЛЕТКИ (WEBAPP) =================
@@ -140,14 +138,15 @@ def handle_web_app_data(message):
             f"🔫 *Твоя награда:* ✨ *{item_name}* ✨\n"
             f"💰 *Цена на рынке:* `{item_price} Голды` 🪙\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"🔥 Скин сохранен в твой инвентарь! Крути еще, кнопка внизу!"
+            f"🔥 Скин сохранен в твой инвентарь!"
         )
         
         bot.send_message(message.chat.id, drop_text, reply_markup=get_main_menu(), parse_mode="Markdown")
     except Exception as e:
         bot.send_message(message.chat.id, "❌ _Произошла ошибка при сохранении предмета._", reply_markup=get_main_menu(), parse_mode="Markdown")
 
+
 # ================= ЗАПУСК БОТА =================
 if __name__ == '__main__':
-    print("[OK] Бот успешно запущен и готов встречать игроков!")
+    print("[OK] Бот успешно запущен со всеми нижними кнопками!")
     bot.polling(none_stop=True)
