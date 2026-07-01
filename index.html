@@ -57,9 +57,10 @@
         }
 
         .case-card img {
-            width: 100%;
+            width: 80%;
             height: auto;
             margin-bottom: 10px;
+            filter: drop-shadow(0px 0px 10px rgba(255, 154, 0, 0.5));
         }
 
         .case-title {
@@ -176,8 +177,8 @@
         
         <div class="cases-grid">
             <div class="case-card" onclick="selectCase('fire')">
-                <!-- Рабочая прямая ссылка на твою картинку кейса -->
-                <img id="case-img-src" src="https://i.ibb.co/6R68gX0z/image-824319.png" alt="Fire Case">
+                <!-- Железобетонная рабочая ссылка на красивый лутбокс -->
+                <img id="case-img-src" src="https://img.icons8.com/isometric/512/loot-box.png" alt="Fire Case">
                 <div class="case-title">🔥 Fire Case</div>
                 <div class="case-cost">100 Голды</div>
             </div>
@@ -205,7 +206,6 @@
 
         let currentCase = null;
 
-        // БАЗА ДАННЫХ ИЗ 15 РЕАЛЬНЫХ ПУШЕК ИЗ СО2 (ДО 300 ГОЛДЫ)
         const casesData = {
             fire: {
                 title: "🔥 Fire Case",
