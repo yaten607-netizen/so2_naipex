@@ -32,8 +32,10 @@ def register_user(user):
     if uid not in USERS_DB:
         USERS_DB[uid] = {
             "name": user.first_name if user.first_name else "Игрок",
-            "balance": 0,
-            "inventory_count": 0
+            "balance": 100,  # Поставил 100 для теста вывода
+            "inventory_count": 0,
+            "waiting_for_screenshot": False,  # Флаг ожидания скриншота
+            "referred_users": []  # Список ID приглашенных пользователей
         }
     return USERS_DB[uid]
 
@@ -70,11 +72,12 @@ def get_main_menu():
     return markup
 
 
-# ================= КОМАНДА /START =================
+# ================= КОМАНДА /START С ОБРАБОТКОЙ РЕФЕРАЛОВ =================
 @bot.message_handler(commands=['start'])
 def start_command(message):
     user_id = message.from_user.id
     
+    # Проверка подписки
     if not check_subscription(user_id):
         markup = InlineKeyboardMarkup()
         btn_link = InlineKeyboardButton("📢 Подписаться на канал", url=f"https://t.me/{CHANNEL_USERNAME.replace('@', '')}")
@@ -90,8 +93,27 @@ def start_command(message):
         )
         return
 
-    register_user(message.from_user)
+    # Проверяем, новый ли пользователь (до вызова register_user)
+    is_new_user = str(user_id) not in USERS_DB
+    u_data = register_user(message.from_user)
     
+    # Обработка реферальной ссылки (если в аргументах старта передан ID друга)
+    args = message.text.split()
+    if len(args) > 1 and is_new_user:
+        referrer_id = args[1]
+        # Проверяем, что реферер существует в базе и это не сам пользователь
+        if referrer_id in USERS_DB and referrer_id != str(user_id):
+            # Проверяем, не добавляли ли этого пользователя ранее
+            if user_id not in USERS_DB[referrer_id]["referred_users"]:
+                USERS_DB[referrer_id]["referred_users"].append(user_id)
+                try:
+                    bot.send_message(
+                        int(referrer_id), 
+                        f"👥 *Новый реферал!* По вашей ссылке зарегистрировался `{u_data['name']}`. Всего рефералов: `{len(USERS_DB[referrer_id]['referred_users'])}`"
+                    )
+                except Exception as e:
+                    print(f"Не удалось отправить уведомление рефереру: {e}")
+
     welcome_text = (
         f"🔥 *Привет, {message.from_user.first_name}! Добро пожаловать в StandHub!* 🔥\n"
         f"----------------------------------------\n"
@@ -187,7 +209,7 @@ def create_promo_command(message):
     )
 
 
-# ================= КОМАНДА АДМИНА: /send (ОБЩАЯ РАССЫЛКА) =================
+# ================= КОМАНДА АДМИНА: /send =================
 @bot.message_handler(commands=['send'])
 def admin_send_broadcast(message):
     if message.from_user.id != ADMIN_ID:
@@ -254,11 +276,46 @@ def activate_promo(message):
         bot.send_message(message.chat.id, "❌ *Ошибка:* Такого промокода не существует.", reply_markup=get_main_menu(), parse_mode="Markdown")
 
 
-# ================= ОБРАБОТКА ТЕКСТОВЫХ КНОПОК МЕНЮ (СТРОГО ВНИЗУ) =================
+# ================= ПРИЕМ СКРИНШОТА ОТ ПОЛЬЗОВАТЕЛЯ И ОТПРАВКА АДМИНУ =================
+@bot.message_handler(content_types=['photo'])
+def handle_screenshot_delivery(message):
+    user_id = message.from_user.id
+    u_data = register_user(message.from_user)
+    
+    if u_data.get("waiting_for_screenshot"):
+        withdraw_amount = u_data['balance']
+        
+        u_data['balance'] = 0
+        u_data['waiting_for_screenshot'] = False
+        
+        bot.send_message(
+            message.chat.id, 
+            "✅ *Заявка успешно отправлена администратору!*\n\n⏱ Ожидайте покупку вашего скина в течение 1–24 часов. Баланс списан.", 
+            reply_markup=get_main_menu(), 
+            parse_mode="Markdown"
+        )
+        
+        admin_alert = (
+            f"💰 *НОВАЯ ЗАЯВКА НА ВЫВОД ГОЛДЫ!* 💰\n"
+            f"----------------------------------------\n"
+            f"👤 *Игрок:* `{u_data['name']}`\n"
+            f"🆔 *ID игрока:* `{user_id}`\n"
+            f"💵 *Сумма вывода:* `{withdraw_amount} Голды` 🪙\n"
+            f"👥 *Рефералов у игрока:* `{len(u_data['referred_users'])}` шт.\n"
+            f"----------------------------------------\n"
+            f"📌 Проверьте рынок Standoff 2, найдите скин по скриншоту ниже и выкупите его!"
+        )
+        bot.send_photo(ADMIN_ID, message.photo[-1].file_id, caption=admin_alert, parse_mode="Markdown")
+    else:
+        bot.send_message(message.chat.id, "🖼 Красивая картинка! Но если вы хотите вывести голду, сначала нажмите кнопку *📤 Вывод голды*.", reply_markup=get_main_menu())
+
+
+# ================= ОБРАБОТКА ТЕКСТОВЫХ КНОПОК МЕНЮ =================
 @bot.message_handler(func=lambda message: True)
 def handle_menu_buttons(message):
     chat_id = message.chat.id
     user_id = message.from_user.id
+    bot_username = bot.get_me().username
     
     if not check_subscription(user_id):
         bot.send_message(chat_id, "⚠️ Вы не подписаны на канал. Нажмите `/start` для проверки подписки.")
@@ -272,23 +329,56 @@ def handle_menu_buttons(message):
             f"----------------------------------------\n"
             f"💵 *Доступно для игры:* `{user_data['balance']} Голды` 🪙\n"
             f"🎒 *Ваш инвентарь:* `{user_data['inventory_count']} предметов`\n"
+            f"👥 *Приглашено друзей:* `{len(user_data['referred_users'])} / 5` 🤝\n"
             f"----------------------------------------\n"
             f"Пополняйте баланс или активируйте промокоды!"
         )
         bot.send_message(chat_id, balance_text, reply_markup=get_main_menu(), parse_mode="Markdown")
         
+    # --- ОБНОВЛЕННАЯ КНОПКА ВЫВОДА ---
     elif message.text == "📤 Вывод голды":
-        withdraw_text = (
-            f"📤 *ВЫВОД ГОЛДЫ В STANDOFF 2* 📤\n"
+        ref_count = len(user_data['referred_users'])
+        
+        # 1. Проверяем баланс (мин. 50 голды)
+        if user_data['balance'] < 50:
+            bot.send_message(
+                chat_id, 
+                f"❌ *Ошибка вывода голды!*\n\nМинимальная сумма для вывода составляет *50 Голды* 🪙.\nУ вас на балансе: `{user_data['balance']} Голды`.", 
+                reply_markup=get_main_menu(), 
+                parse_mode="Markdown"
+            )
+            return
+            
+        # 2. Проверяем количество рефералов (мин. 5 друзей)
+        if ref_count < 5:
+            ref_link = f"https://t.me/{bot_username}?start={chat_id}"
+            bot.send_message(
+                chat_id, 
+                f"🛡 *Доступ заблокирован!*\n\n"
+                f"Для вывода средств вам необходимо пригласить как минимум *5 активных друзей* через реферальную систему.\n\n"
+                f"📊 Ваш прогресс: `{ref_count} / 5` рефералов.\n"
+                f"🔗 *Ваша ссылка для приглашений:*\n`{ref_link}`", 
+                reply_markup=get_main_menu(), 
+                parse_mode="Markdown"
+            )
+            return
+            
+        # Если все проверки пройдены, включаем режим ожидания фото
+        user_data['waiting_for_screenshot'] = True
+        
+        withdraw_instructions = (
+            f"📤 *ОФОРМЛЕНИЕ ВЫВОДА ГОЛДЫ* 📤\n"
             f"----------------------------------------\n"
-            f"ℹ️ Вывод доступен от *50 Голды*.\n\n"
-            f"📌 *Инструкция по выводу:*\n"
-            f"1. Выставите любой дешевый предмет на рынок за сумму вывода.\n"
-            f"2. Передайте ID предмета администрации.\n"
+            f"💰 Вы выводите: `{user_data['balance']} Голды` 🪙\n\n"
+            f"🚨 *ИНСТРУКЦИЯ (Выполните строго по пунктам):*\n"
+            f"1️⃣ Зайдите в игру *Standoff 2* и выберите любой дешевый скин (желательно Common/Uncommon).\n"
+            f"2️⃣ Найдите этот скин с **уникальным паттерном** (или наклейкой), чтобы администратор точно распознал именно ваш лот.\n"
+            f"3️⃣ Выставите его на рынок ровно за `{user_data['balance']}` Голды.\n"
+            f"4️⃣ Сделайте **четкий скриншот** выставленного предмета на рынке, где видна цена и ваш аватар/паттерн.\n"
             f"----------------------------------------\n"
-            f"❌ У вас пока недостаточно голды для оформления вывода."
+            f"👇 *Прямо сейчас отправьте этот скриншот (картинкой) сюда в чат!*"
         )
-        bot.send_message(chat_id, withdraw_text, reply_markup=get_main_menu(), parse_mode="Markdown")
+        bot.send_message(chat_id, withdraw_instructions, reply_markup=get_main_menu(), parse_mode="Markdown")
         
     elif message.text == "ℹ️ Помощь / Правила":
         help_text = (
@@ -302,12 +392,13 @@ def handle_menu_buttons(message):
         bot.send_message(chat_id, help_text, reply_markup=get_main_menu(), parse_mode="Markdown")
         
     elif message.text == "👥 Рефералы":
-        bot_username = bot.get_me().username
+        ref_link = f"https://t.me/{bot_username}?start={chat_id}"
         ref_text = (
             f"👥 *РЕФЕРАЛЬНАЯ СИСТЕМА* 👥\n"
             f"----------------------------------------\n"
-            f"🔗 *Ваша ссылка для друзей:*\n"
-            f"https://t.me/{bot_username}?start={chat_id}"
+            f"🤝 Приглашайте друзей и открывайте возможность вывода голды!\n"
+            f"📊 Вы уже пригласили: `{len(user_data['referred_users'])} / 5` друзей.\n\n"
+            f"🔗 *Ваша ссылка для друзей:*\n`{ref_link}`"
         )
         bot.send_message(chat_id, ref_text, reply_markup=get_main_menu(), parse_mode="Markdown")
         
