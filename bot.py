@@ -3,15 +3,15 @@ from telebot.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMar
 import json
 
 # ================= НАСТРОЙКА БОТА =================
-TOKEN = 'ТВОЙ_ТОКЕН_БОТА'
-WEBAPP_URL = "https://ТВОЙ_НИК.github.io/so2_naipex/"
+TOKEN = '8802875670:AAFIKoKmaRtmSh8wL32mMKkIiLObKYqSpTw'
+# Ссылка на твой WebApp-магазин
+WEBAPP_URL = "https://ten607-netizen.github.io/so2_naipex/"
 
 bot = telebot.TeleBot(TOKEN)
 
 # --- ГЛАВНОЕ МЕНЮ (НИЖНИЕ КНОПКИ) ---
 def get_main_menu():
     markup = ReplyKeyboardMarkup(resize_keyboard=True, row_width=1)
-    # Главная кнопка-запускалка
     web_app = WebAppInfo(url=WEBAPP_URL)
     btn_shop = KeyboardButton("🎰 ОТКРЫТЬ МАГАЗИН КЕЙСОВ 🎰", web_app=web_app)
     markup.add(btn_shop)
@@ -47,17 +47,15 @@ def start_command(message):
         f"👇 *Используй понятное меню ниже для управления:* 👇"
     )
     
-    # Отправляем сообщение с инлайн-кнопками профиля и помощи
     bot.send_message(
         message.chat.id, 
         welcome_text, 
         reply_markup=get_start_inline(), 
         parse_mode="Markdown"
     )
-    # Выкатываем нижнюю кнопку магазина, чтобы она закрепилась
     bot.send_message(
         message.chat.id,
-        "🎒 Чтобы перейти к выбору кейсов, нажми большую кнопку «*ОТКРЫТЬ МАГАЗИН КЕЙСОВ*» в самом низу.",
+        "🎒 Чтобы перейти к выбору кейсов, нажми большую кнопку «*ОТКРЫТЬ МАГАЗИН КЕЙСОВ*» в самом низу чата.",
         reply_markup=get_main_menu(),
         parse_mode="Markdown"
     )
@@ -66,7 +64,6 @@ def start_command(message):
 # ================= ОБРАБОТКА НАЖАТИЙ НА КНОПКИ (CALLBACK) =================
 @bot.callback_query_handler(func=lambda call: True)
 def handle_callbacks(call):
-    # Логика для кнопки "Мой Профиль"
     if call.data == "open_profile":
         profile_text = (
             f"👤 *ВАШ ИГРОВОЙ ПРОФИЛЬ* 👤\n"
@@ -86,7 +83,6 @@ def handle_callbacks(call):
             parse_mode="Markdown"
         )
         
-    # Логика для кнопки "Помощь и Правила"
     elif call.data == "open_help":
         help_text = (
             f"ℹ️ *ИНСТРУКЦИЯ ДЛЯ ИГРОКОВ* ℹ️\n"
@@ -109,7 +105,6 @@ def handle_callbacks(call):
             parse_mode="Markdown"
         )
         
-    # Возврат назад в главное меню
     elif call.data == "back_to_start":
         user_name = call.from_user.first_name
         welcome_text = (
@@ -148,21 +143,11 @@ def handle_web_app_data(message):
             f"🔥 Скин сохранен в твой инвентарь! Крути еще, кнопка внизу!"
         )
         
-        bot.send_message(
-            message.chat.id, 
-            drop_text, 
-            reply_markup=get_main_menu(), 
-            parse_mode="Markdown"
-        )
+        bot.send_message(message.chat.id, drop_text, reply_markup=get_main_menu(), parse_mode="Markdown")
     except Exception as e:
-        bot.send_message(
-            message.chat.id, 
-            "❌ _Произошла ошибка при сохранении предмета. Попробуй еще раз!_",
-            reply_markup=get_main_menu(),
-            parse_mode="Markdown"
-        )
+        bot.send_message(message.chat.id, "❌ _Произошла ошибка при сохранении предмета._", reply_markup=get_main_menu(), parse_mode="Markdown")
 
-# ================= ЗАПУСК СЛУШАТЕЛЯ =================
+# ================= ЗАПУСК БОТА =================
 if __name__ == '__main__':
     print("[OK] Бот успешно запущен и готов встречать игроков!")
     bot.polling(none_stop=True)
