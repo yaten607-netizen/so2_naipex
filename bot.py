@@ -1,15 +1,47 @@
 import telebot
 from telebot.types import ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
 import json
+import os
 
 # ================= НАСТРОЙКА БОТА =================
 TOKEN = '8802875670:AAFIKoKmaRtmSh8wL32mMKkIiLObKYqSpTw'
 WEBAPP_URL = "https://ten607-netizen.github.io/so2_naipex/"
 
-# Твой личный Telegram ID для доступа к админке
+# Твой личный Telegram ID
 ADMIN_ID = 5376742900  
 
 bot = telebot.TeleBot(TOKEN)
+
+# Файл для хранения базы данных игроков
+DB_FILE = 'users_db.json'
+
+# Загрузка базы данных
+def load_db():
+    if not os.path.exists(DB_FILE):
+        return {}
+    try:
+        with open(DB_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except:
+        return {}
+
+# Сохранение базы данных
+def save_db(db):
+    with open(DB_FILE, 'w', encoding='utf-8') as f:
+        json.dump(db, f, ensure_ascii=False, indent=4)
+
+# Регистрация или обновление юзера в базе
+def check_and_register_user(user):
+    db = load_db()
+    uid = str(user.id)
+    if uid not in db:
+        db[uid] = {
+            "name": user.first_name if user.first_name else "Игрок",
+            "balance": 0,
+            "inventory_count": 0
+        }
+        save_db(db)
+    return db[uid]
 
 # База данных промокодов в оперативной памяти
 PROMO_CODES = {
@@ -20,7 +52,6 @@ PROMO_CODES = {
 def get_main_menu(user_id):
     markup = ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     
-    # Главная кнопка WebApp на всю ширину
     web_app = WebAppInfo(url=WEBAPP_URL)
     btn_shop = KeyboardButton("🎰 ОТКРЫТЬ МАГАЗИН КЕЙСОВ 🎰", web_app=web_app)
     
@@ -28,15 +59,15 @@ def get_main_menu(user_id):
     btn_withdraw = KeyboardButton("📤 Вывод голды")
     btn_ref = KeyboardButton("👥 Рефералы")
     btn_promo = KeyboardButton("🎁 Промокод")
-    btn_top = KeyboardButton("🏆 Топ игроков")  # Общая кнопка топа
+    btn_top = KeyboardButton("🏆 Топ игроков")
     btn_help = KeyboardButton("ℹ️ Помощь / Правила")
     
     markup.add(btn_shop)
     markup.add(btn_balance, btn_withdraw)
     markup.add(btn_ref, btn_promo)
-    markup.add(btn_top, btn_help)  # Добавили топ в меню
+    markup.add(btn_top, btn_help)
     
-    # Кнопка админа — строго для твоего аккаунта
+    # Кнопка админа видна ТОЛЬКО тебе
     if user_id == ADMIN_ID:
         btn_admin = KeyboardButton("👑 Админ-панель")
         markup.add(btn_admin)
@@ -48,10 +79,11 @@ def get_main_menu(user_id):
 @bot.message_handler(commands=['start'])
 def start_command(message):
     user_id = message.from_user.id
-    user_name = message.from_user.first_name
+    # Регистрируем игрока в базе при старте
+    check_and_register_user(message.from_user)
     
     welcome_text = (
-        f"🔥 *Привет, {user_name}! Добро пожаловать в StandHub!* 🔥\n"
+        f"🔥 *Привет, {message.from_user.first_name}! Добро пожаловать в StandHub!* 🔥\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"🌟 *StandHub* — это лучший симулятор открытия кейсов из Standoff 2 прямо в Telegram!\n\n"
         f"⚡️ Испытай свою удачу, крути рулетку, выбивай Арканы и собирай самый дорогой инвентарь!\n"
@@ -73,13 +105,16 @@ def handle_menu_buttons(message):
     chat_id = message.chat.id
     user_id = message.from_user.id
     
+    # Всегда проверяем/регистрируем юзера при любом клике
+    user_data = check_and_register_user(message.from_user)
+    
     # Кнопка: Мой Баланс
     if message.text == "💰 Мой Баланс":
         balance_text = (
             f"💰 *ВАШ БАЛАНС* 💰\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"💵 *Доступно для игры:* `0 Голды` 🪙\n"
-            f"🎒 *Ваш инвентарь:* `0 предметов`\n"
+            f"💵 *Доступно для игры:* `{user_data['balance']} Голды` 🪙\n"
+            f"🎒 *Ваш инвентарь:* `{user_data['inventory_count']} предметов`\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             f"Пополняйте баланс у администратора или приглашайте друзей!"
         )
@@ -120,8 +155,7 @@ def handle_menu_buttons(message):
             f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             f"🔗 *Ваша персональная ссылка для друзей:*\n"
             f"https://t.me/{bot_username}?start={chat_id}\n\n"
-            f"🎁 Отправляй её друзьям и получай бонусы за каждого, кто запустит бота!\n"
-            f"📈 Всего приглашено: `0` человек."
+            f"🎁 Отправляй её друзьям и получай бонусы за каждого, кто запустит бота!"
         )
         bot.send_message(chat_id, ref_text, reply_markup=get_main_menu(user_id), parse_mode="Markdown")
         
@@ -136,38 +170,57 @@ def handle_menu_buttons(message):
         )
         bot.send_message(chat_id, promo_text, reply_markup=get_main_menu(user_id), parse_mode="Markdown")
 
-    # Кнопка: ТОП ПО БАЛАНСУ (Доступна ВСЕМ игрокам)
+    # Кнопка: НАСТОЯЩИЙ ТОП ПО БАЛАНСУ БОТА
     elif message.text == "🏆 Топ игроков":
-        top_text = (
-            f"🏆 *ТОП-5 БОГАТЫХ ИГРОКОВ STANDHUB* 🏆\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"🥇 1. `Naipex_Fx` — 54,200 Голды 🪙\n"
-            f"🥈 2. `Scrooge_SO2` — 32,150 Голды 🪙\n"
-            f"🥉 3. `Твой_Друг` — 15,400 Голды 🪙\n"
-            f"🏅 4. `Gamer333` — 9,800 Голды 🪙\n"
-            f"🏅 5. `Капибара` — 7,200 Голды 🪙\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"🔥 *Твое место в топе:* `Пока не в рейтинге`\n"
-            f"👉 Крути кейсы, выбивай дорогие скины и продавай их, чтобы попасть на доску почёта!"
-        )
+        db = load_db()
+        # Сортируем всех реальных юзеров по убыванию баланса
+        sorted_users = sorted(db.items(), key=lambda x: x[1]['balance'], reverse=True)
+        
+        top_text = f"🏆 *НАСТОЯЩИЙ ТОП ИГРОКОВ STANDHUB* 🏆\n"
+        top_text += f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        
+        # Выводим первые 5 мест
+        medals = ["🥇", "🥈", "🥉", "🏅", "🏅"]
+        for i in range(5):
+            if i < len(sorted_users):
+                u_info = sorted_users[i][1]
+                top_text += f"{medals[i]} {i+1}. `{u_info['name']}` — {u_info['balance']} Голды 🪙\n"
+            else:
+                top_text += f"{medals[i]} {i+1}. `Свободное место` — 0 Голды 🪙\n"
+                
+        top_text += f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        
+        # Ищем место текущего игрока в общем топе
+        user_rank = "Не в рейтинге"
+        for index, (uid, _) in enumerate(sorted_users):
+            if uid == str(user_id):
+                user_rank = f"{index + 1} из {len(sorted_users)}"
+                break
+                
+        top_text += f"🔥 *Твое место в топе:* `{user_rank}`\n"
+        top_text += f"👉 Зарабатывай голду, чтобы подняться выше!"
+        
         bot.send_message(chat_id, top_text, reply_markup=get_main_menu(user_id), parse_mode="Markdown")
 
-    # Кнопка: ЛИЧНАЯ АДМИН-ПАНЕЛЬ (ТЕПЕРЬ ТУТ СТАТИСТИКА)
+    # Кнопка: РАБОЧАЯ АДМИН-ПАНЕЛЬ СО СТАТИСТИКОЙ (Только для тебя)
     elif message.text == "👑 Админ-панель" and user_id == ADMIN_ID:
+        db = load_db()
+        total_users = len(db) # Считаем настоящих людей в базе
         total_promos = len(PROMO_CODES)
+        
         admin_text = (
             f"👑 *ПАНЕЛЬ АДМИНИСТРАТОРА STANDHUB* 👑\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"📊 *СТАТИСТИКА БОТА:*\n"
+            f"📊 *РЕАЛЬНАЯ СТАТИСТИКА БОТА:*\n"
             f"🟢 Статус сервера: `ONLINE` (Railway)\n"
-            f"👥 Пользователей в боте: `Активны`\n"
-            f"🎁 Промокодов создано: `{total_promos} шт.`\n"
+            f"👥 Всего реальных игроков в базе: `{total_users} чел.`\n"
+            f"🎁 Промокодов активно: `{total_promos} шт.`\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"🛠 *Управление промокодами:*\n"
-            f"➕ Чтобы создать новый промокод, отправь команду:\n"
+            f"🛠 *Создание промокода (Только для тебя):*\n"
+            f"Отправь в чат команду:\n"
             f"`/create_promo НАЗВАНИЕ СУММА`\n"
             f"_(Пример: /create_promo UPDATE500 500)_\n\n"
-            f"📝 *Список кодов в базе:* " + ", ".join([f"`{c}`" for c in PROMO_CODES.keys()])
+            f"📝 *Список активных кодов:* " + ", ".join([f"`{c}`" for c in PROMO_CODES.keys()])
         )
         bot.send_message(chat_id, admin_text, reply_markup=get_main_menu(user_id), parse_mode="Markdown")
 
@@ -176,7 +229,6 @@ def handle_menu_buttons(message):
 @bot.message_handler(commands=['create_promo'])
 def create_promo_command(message):
     user_id = message.from_user.id
-    # Строжайшая проверка, чтобы обычный юзер не смог сделать промокод
     if user_id != ADMIN_ID:
         return
 
@@ -214,6 +266,14 @@ def activate_promo(message):
     
     if user_promo in PROMO_CODES:
         gold_reward = PROMO_CODES[user_promo]
+        
+        # Начисляем голду в настоящую базу данных
+        db = load_db()
+        uid = str(user_id)
+        if uid in db:
+            db[uid]['balance'] += gold_reward
+            save_db(db)
+            
         bot.send_message(
             message.chat.id, 
             f"🎉 *Успех!* Промокод `{user_promo}` активирован! Тебе начислено *+{gold_reward} Голды*! 🪙", 
@@ -234,6 +294,14 @@ def handle_web_app_data(message):
         item_price = data.get("item_price", 0)
         case_cost = data.get("case_cost", 100)
         
+        # Обновляем инвентарь игрока в реальной базе данных при выпадении дропа
+        db = load_db()
+        uid = str(user_id)
+        if uid in db:
+            db[uid]['inventory_count'] += 1
+            # Если в WebApp баланс уменьшается/увеличивается, можно синхронизировать тут
+            save_db(db)
+        
         drop_text = (
             f"🎉 *ПОЗДРАВЛЯЕМ! ТЕБЕ ВЫПАЛ ДРОП!* 🎉\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -251,5 +319,5 @@ def handle_web_app_data(message):
 
 # ================= ЗАПУСК БОТА =================
 if __name__ == '__main__':
-    print("[OK] Код успешно обновлен. Топ и админ-статистика на кнопках готовы!")
+    print("[OK] База данных подключена. Настоящий топ и статистика админа работают!")
     bot.polling(none_stop=True)
