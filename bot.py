@@ -17,11 +17,11 @@ bot = telebot.TeleBot(TOKEN)
 # База данных игроков в оперативной памяти
 USERS_DB = {}
 
-# База данных промокодов теперь хранит: {"ИМЯ": {"gold": 100, "uses": 5, "users_activated": []}}
+# База данных промокодов
 PROMO_CODES = {
     "START": {
         "gold": 100,
-        "uses": 99999, # Бесконечный стартовый
+        "uses": 99999,
         "users_activated": []
     }
 }
@@ -94,10 +94,10 @@ def start_command(message):
     
     welcome_text = (
         f"🔥 *Привет, {message.from_user.first_name}! Добро пожаловать в StandHub!* 🔥\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"----------------------------------------\n"
         f"🌟 *StandHub* — это лучший симулятор открытия кейсов из Standoff 2 прямо в Telegram!\n\n"
         f"⚡️ Испытай свою удачу, крути рулетку, выбивай Арканы и собирай самый дорогой инвентарь!\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"----------------------------------------\n"
         f"👇 *Все управление находится в кнопках ниже:* 👇"
     )
     bot.send_message(message.chat.id, welcome_text, reply_markup=get_main_menu(), parse_mode="Markdown")
@@ -114,7 +114,7 @@ def callback_check_sub(call):
         
         welcome_text = (
             f"🔥 *Добро пожаловать в StandHub!* 🔥\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"----------------------------------------\n"
             f"👇 *Все управление находится в кнопках ниже:* 👇"
         )
         bot.send_message(call.message.chat.id, welcome_text, reply_markup=get_main_menu(), parse_mode="Markdown")
@@ -133,15 +133,15 @@ def admin_panel_command(message):
     
     admin_text = (
         f"👑 *ПАНЕЛЬ АДМИНИСТРАТОРА STANDHUB* 👑\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"----------------------------------------\n"
         f"📊 *АКТУАЛЬНАЯ СТАТИСТИКА:*\n"
         f"🟢 Статус сервера: `ONLINE`\n"
         f"👥 Игроков в сессии: `{total_users} чел.`\n"
         f"🎁 Промокодов создано: `{total_promos} шт.`\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"----------------------------------------\n"
         f"🛠 *КОМАНДЫ УПРАВЛЕНИЯ:*\n"
         f"➕ Создать лимитированный промокод:\n`/create_promo НАЗВАНИЕ ГОЛДА АКТИВАЦИИ`\n"
-        f"_(Пример: /create_promo BOOST500 500 10 — даст 500 голды первым 10 людям)_\n\n"
+        f"_(Пример: /create_promo BOOST500 500 10)_\n\n"
         f"📢 Рассылка всем игрокам:\n`/send ТЕКСТ РАССЫЛКИ`\n\n"
         f"📝 *Список кодов в базе:*\n"
     )
@@ -151,7 +151,7 @@ def admin_panel_command(message):
     bot.send_message(message.chat.id, admin_text, reply_markup=get_main_menu(), parse_mode="Markdown")
 
 
-# ================= КОМАНДА АДМИНА: /create_promo (ОБНОВЛЕННАЯ С АКТИВАЦИЯМИ) =================
+# ================= КОМАНДА АДМИНА: /create_promo =================
 @bot.message_handler(commands=['create_promo'])
 def create_promo_command(message):
     if message.from_user.id != ADMIN_ID:
@@ -159,7 +159,7 @@ def create_promo_command(message):
 
     args = message.text.split()
     if len(args) < 4:
-        bot.send_message(message.chat.id, "❌ *Ошибка:* Мало данных! Пиши строго так:\n`/create_promo НАЗВАНИЕ ГОЛДА АКТИВАЦИИ`\n\n_Пример:_ `/create_promo GIFT100 100 5` (на 5 человек)", parse_mode="Markdown")
+        bot.send_message(message.chat.id, "❌ *Ошибка:* Мало данных! Пиши строго так:\n`/create_promo НАЗВАНИЕ ГОЛДА АКТИВАЦИИ`", parse_mode="Markdown")
         return
 
     promo_name = args[1].upper()
@@ -167,10 +167,9 @@ def create_promo_command(message):
         promo_amount = int(args[2])
         promo_uses = int(args[3])
     except ValueError:
-        bot.send_message(message.chat.id, "❌ *Ошибка:* И голда, и число активаций должны быть круглыми числами!", parse_mode="Markdown")
+        bot.send_message(message.chat.id, "❌ *Ошибка:* И голда, и число активаций должны быть числами!", parse_mode="Markdown")
         return
 
-    # Записываем структуру с лимитом использований
     PROMO_CODES[promo_name] = {
         "gold": promo_amount,
         "uses": promo_uses,
@@ -229,22 +228,18 @@ def activate_promo(message):
     if user_promo in PROMO_CODES:
         promo_data = PROMO_CODES[user_promo]
         
-        # 1. Проверяем, не активировал ли этот игрок код РАНЕЕ
         if user_id in promo_data["users_activated"]:
             bot.send_message(message.chat.id, "❌ *Ошибка:* Ты уже активировал данный промокод!", reply_markup=get_main_menu(), parse_mode="Markdown")
             return
             
-        # 2. Проверяем, остались ли свободные активации
         if promo_data["uses"] <= 0:
-            bot.send_message(message.chat.id, "❌ *Ошибка:* Этот промокод закончился! У него был ограниченный лимит мест.", reply_markup=get_main_menu(), parse_mode="Markdown")
+            bot.send_message(message.chat.id, "❌ *Ошибка:* Этот промокод закончился!", reply_markup=get_main_menu(), parse_mode="Markdown")
             return
             
-        # Начисляем награду
         gold_reward = promo_data["gold"]
         u_data = register_user(message.from_user)
         u_data['balance'] += gold_reward
         
-        # Минусуем одну активацию и заносим юзера в список "использовавших"
         promo_data["uses"] -= 1
         promo_data["users_activated"].append(user_id)
             
@@ -274,10 +269,10 @@ def handle_menu_buttons(message):
     if message.text == "💰 Мой Баланс":
         balance_text = (
             f"💰 *ВАШ БАЛАНС* 💰\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"----------------------------------------\n"
             f"💵 *Доступно для игры:* `{user_data['balance']} Голды` 🪙\n"
             f"🎒 *Ваш инвентарь:* `{user_data['inventory_count']} предметов`\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"----------------------------------------\n"
             f"Пополняйте баланс или активируйте промокоды!"
         )
         bot.send_message(chat_id, balance_text, reply_markup=get_main_menu(), parse_mode="Markdown")
@@ -285,12 +280,12 @@ def handle_menu_buttons(message):
     elif message.text == "📤 Вывод голды":
         withdraw_text = (
             f"📤 *ВЫВОД ГОЛДЫ В STANDOFF 2* 📤\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"----------------------------------------\n"
             f"ℹ️ Вывод доступен от *50 Голды*.\n\n"
             f"📌 *Инструкция по выводу:*\n"
             f"1. Выставите любой дешевый предмет на рынок за сумму вывода.\n"
             f"2. Передайте ID предмета администрации.\n"
-            ━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"----------------------------------------\n"
             f"❌ У вас пока недостаточно голды для оформления вывода."
         )
         bot.send_message(chat_id, withdraw_text, reply_markup=get_main_menu(), parse_mode="Markdown")
@@ -298,7 +293,7 @@ def handle_menu_buttons(message):
     elif message.text == "ℹ️ Помощь / Правила":
         help_text = (
             f"ℹ️ *ПОНЯТНАЯ ИНСТРУКЦИЯ ДЛЯ ИГРОКОВ* ℹ️\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"----------------------------------------\n"
             f"1️⃣ Нажми кнопку *🎰 ОТКРЫТЬ МАГАЗИН КЕЙСОВ* ниже.\n"
             f"2️⃣ Кликни на любой доступный кейс.\n"
             f"3️⃣ Нажми кнопку *🚀 ИСПЫТАТЬ УДАЧУ*, чтобы запустить рулетку.\n"
@@ -310,7 +305,7 @@ def handle_menu_buttons(message):
         bot_username = bot.get_me().username
         ref_text = (
             f"👥 *РЕФЕРАЛЬНАЯ СИСТЕМА* 👥\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"----------------------------------------\n"
             f"🔗 *Ваша ссылка для друзей:*\n"
             f"https://t.me/{bot_username}?start={chat_id}"
         )
@@ -319,7 +314,7 @@ def handle_menu_buttons(message):
     elif message.text == "🎁 Промокод":
         promo_text = (
             f"🎁 *АКТИВАЦИЯ ПРОМОКОДА* 🎁\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"----------------------------------------\n"
             f"👉 Чтобы активировать код, отправь сообщение в формате:\n"
             f"`/promo НАЗВАНИЕ_ПРОМОКОДА`"
         )
@@ -328,17 +323,17 @@ def handle_menu_buttons(message):
     elif message.text == "🏆 Топ игроков":
         sorted_users = sorted(USERS_DB.items(), key=lambda x: x[1]['balance'], reverse=True)
         top_text = f"🏆 *НАСТОЯЩИЙ ТОП ИГРОКОВ STANDHUB* 🏆\n"
-        top_text += f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        top_text += f"----------------------------------------\n"
         
-        medals = ["🥇", "🥈", "🥉", "🏅", "🏅"]
+        medals = ["1.", "2.", "3.", "4.", "5."]
         for i in range(5):
             if i < len(sorted_users):
                 u_info = sorted_users[i][1]
-                top_text += f"{medals[i]} {i+1}. `{u_info['name']}` — {u_info['balance']} Голды 🪙\n"
+                top_text += f"{medals[i]} `{u_info['name']}` — {u_info['balance']} Голды 🪙\n"
             else:
-                top_text += f"{medals[i]} {i+1}. `Свободное место` — 0 Голды 🪙\n"
+                top_text += f"{medals[i]} `Свободное место` — 0 Голды 🪙\n"
                 
-        top_text += f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        top_text += f"----------------------------------------\n"
         bot.send_message(chat_id, top_text, reply_markup=get_main_menu(), parse_mode="Markdown")
 
 
@@ -355,11 +350,11 @@ def handle_web_app_data(message):
         
         drop_text = (
             f"🎉 *ПОЗДРАВЛЯЕМ! ТЕБЕ ВЫПАЛ ДРОП!* 🎉\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"🔫 *Твоя награда:* ✨ *{item_name}* ✨\n"
+            f"----------------------------------------\n"
+            f"🔫 *Твоя награда:* {item_name}\n"
             f"💰 *Цена на рынке:* `{item_price} Голды` 🪙\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"🔥 Скин сохранен в инвентарь!"
+            f"----------------------------------------\n"
+            f"🔥 Скин сохранен в инвенварь!"
         )
         bot.send_message(message.chat.id, drop_text, reply_markup=get_main_menu(), parse_mode="Markdown")
     except:
